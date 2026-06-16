@@ -386,6 +386,28 @@
 
     <!-- TAB: LIQUIDATE -->
     <div class="tab-panel active" id="panel-liq">
+      <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:14px;padding:16px 18px;margin-bottom:12px">
+        <div style="color:var(--risk);font-weight:800;font-size:0.85em;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px">How Liquidations Work</div>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When a vault's collateral ratio (CR) drops below 110%, it becomes liquidatable. This happens when the market price of PLS falls sharply, or when accumulated stability fees have grown the debt balance without the vault owner adding more collateral.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">As a liquidator, you repay some or all of the vault's debt in SunPLS and receive PLS collateral back at a discount — the liquidation bonus. The minimum repayment is 5% of the vault's outstanding debt. The bonus scales based on how much you repay: smaller repayments earn a higher bonus percentage (up to 7%), larger repayments earn a lower percentage (floor ~2%), ensuring the opportunity remains profitable regardless of size.</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Trigger CR</div>
+            <div style="color:var(--risk);font-weight:800;font-size:1em;margin-top:2px">&lt; 110%</div>
+          </div>
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Min Repay</div>
+            <div style="color:var(--risk);font-weight:800;font-size:1em;margin-top:2px">5% of Debt</div>
+          </div>
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Bonus Range</div>
+            <div style="color:var(--safe);font-weight:800;font-size:1em;margin-top:2px">2% – 7%</div>
+          </div>
+        </div>
+        <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6">
+          <strong style="color:rgba(254,243,199,0.85)">Step by step:</strong> Click <em>Scan All Vaults</em> → vaults below 110% CR appear in the table → click <em>Liquidate</em> on your target → enter SunPLS amount (≥ minimum shown) → confirm. The contract transfers your SunPLS to the vault (burns it), then sends you PLS collateral equal to your repayment value plus the bonus.
+        </div>
+      </div>
       <div class="scan-bar" style="margin-bottom:10px">
         <span class="scan-status">Ready to scan</span>
         <div class="filter-chips">
@@ -417,6 +439,31 @@
 
     <!-- TAB: REDEEM -->
     <div class="tab-panel" id="panel-redeem">
+      <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.2);border-radius:14px;padding:16px 18px;margin-bottom:12px">
+        <div style="color:var(--cyan);font-weight:800;font-size:0.85em;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px">How Redemptions Work</div>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">Redemptions are the peg-enforcement mechanism of SunPLS. When SunPLS trades below its R (redemption value) on the open market, you can profitably buy it cheap and redeem it at the full R rate — receiving PLS collateral directly from undercollateralized vaults. This arbitrage loop continuously pulls the market price back toward R.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When you redeem, you burn SunPLS and receive PLS from a specific vault's collateral. The amount you receive is calculated at the current R value — not the market price. This guarantees you always get exactly R WPLS per SunPLS redeemed, regardless of market conditions. A small 0.5% fee from the PLS paid out goes to the vault owner as compensation for having their collateral taken.</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+          <div style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Eligible Vaults</div>
+            <div style="color:var(--cyan2);font-weight:800;font-size:1em;margin-top:2px">CR &lt; 150%</div>
+          </div>
+          <div style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Price Used</div>
+            <div style="color:var(--cyan2);font-weight:800;font-size:1em;margin-top:2px">R Value</div>
+          </div>
+          <div style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Fee</div>
+            <div style="color:var(--warn);font-weight:800;font-size:1em;margin-top:2px">0.5% to Owner</div>
+          </div>
+        </div>
+        <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6;margin-bottom:8px">
+          <strong style="color:rgba(254,243,199,0.85)">The math:</strong> Burn 100 SunPLS → receive (100 × R) WPLS minus 0.5% fee. If R = 1.5 WPLS, you get 149.25 PLS. No slippage, no oracle manipulation, guaranteed rate.
+        </div>
+        <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6">
+          <strong style="color:rgba(254,243,199,0.85)">What happens to the redeemed vault?</strong> The vault's debt decreases by the SunPLS you burned, and its collateral decreases by the PLS paid out. If the vault had 130% CR before your redemption and you partially redeem, it may still have some collateral and debt remaining — it is not liquidated, just trimmed. This gives vault owners an incentive to keep their CR above 150% to avoid being redeemed against.
+        </div>
+      </div>
       <div class="scan-bar" style="margin-bottom:10px">
         <span class="scan-status">Ready to scan</span>
         <div class="filter-chips">
@@ -457,6 +504,10 @@
 
     <!-- TAB: ALL VAULTS -->
     <div class="tab-panel" id="panel-all">
+      <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:14px 18px;margin-bottom:12px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.72)">
+        <strong style="color:var(--sun2);display:block;margin-bottom:5px">Full protocol overview — every registered vault on-chain</strong>
+        Click <em>Scan All</em> to load every vault that has ever interacted with the SunPLS v2 contract. Use the filter chips to narrow down to Liquidatable (&lt;110% CR), Redeemable (&lt;150% CR), or Safe (≥150% CR) vaults. Sort any column by clicking its header. Use the address search box to find a specific wallet. Each row shows the vault's full position — collateral, debt, CR, and status — with direct action buttons to liquidate or redeem where applicable.
+      </div>
       <div class="scan-bar" style="margin-bottom:10px">
         <input id="searchInput" type="text" placeholder="Filter by address..." oninput="filterAll()" />
         <div class="filter-chips">
@@ -488,6 +539,10 @@
 
     <!-- TAB: VAULT LOOKUP -->
     <div class="tab-panel" id="panel-lookup">
+      <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:14px;padding:14px 18px;margin-bottom:12px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.72)">
+        <strong style="color:var(--purple2);display:block;margin-bottom:5px">Deep-inspect any wallet address</strong>
+        Enter any PulseChain wallet address to see the full state of that vault — collateral locked, debt outstanding, current CR, accruing stability rate, how much more they could borrow, and whether the oracle is healthy for their position. If the vault is liquidatable or redeemable, action buttons appear directly in the result so you can act on it immediately. Useful for monitoring specific vaults, tracking your own vault from a read-only device, or due-diligence before a large redemption.
+      </div>
       <div class="lookup-panel">
         <div class="lookup-title">Inspect Any Vault</div>
         <div class="lookup-row">
