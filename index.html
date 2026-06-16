@@ -465,24 +465,36 @@
 
       <!-- AUTO TAB -->
       <div class="tab-content active" id="tab-auto" style="margin-top:12px">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:11px 13px;margin-bottom:11px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.75)">
+          <strong style="color:var(--sun2);display:block;margin-bottom:4px">One transaction. Zero manual steps.</strong>
+          Enter the amount of PLS you want to put in. The contract wraps it to WPLS, deposits it as collateral, and automatically mints the maximum SunPLS at a safe 155% collateral ratio — all in a single transaction. Your SunPLS lands in your wallet immediately. The 155% target gives you a 5% buffer above the 150% minimum so small price moves won't put you at risk right away.
+        </div>
         <div class="field-label">PLS to deposit &amp; auto-mint (155% CR)</div>
         <input id="autoAmt" type="number" step="1" placeholder="e.g. 1500" />
         <div class="preview" id="autoPreview"></div>
         <button class="btn btn-gold" id="autoBtn" disabled>1-Click Auto Mint</button>
         <div class="helper">Deposits PLS &amp; mints SunPLS in one transaction · auto-targets 155% CR</div>
-        <div style="margin-top:10px">
+        <div style="margin-top:14px;border-top:1px solid rgba(245,158,11,0.1);padding-top:12px">
+          <div style="font-size:0.82em;color:rgba(254,243,199,0.6);margin-bottom:8px;line-height:1.55">
+            <strong style="color:var(--risk);display:block;margin-bottom:3px">Full Exit — Repay All &amp; Withdraw Everything</strong>
+            Closes your vault completely in one transaction. Repays 100% of your outstanding debt (including any accrued interest) and withdraws all collateral back to your wallet. You must have enough SunPLS in your wallet to cover the full current debt — check the "Debt" field on your vault card before clicking. Fails safely if your SunPLS balance is insufficient.
+          </div>
           <button class="btn btn-red" id="repayAllBtn" disabled>Repay All &amp; Withdraw Everything</button>
-          <div class="helper">Full exit — repays all debt, withdraws all collateral</div>
+          <div class="helper">Full exit — repays all debt, withdraws all collateral in one transaction</div>
         </div>
       </div>
 
       <!-- DEPOSIT TAB -->
       <div class="tab-content" id="tab-deposit" style="margin-top:12px">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:11px 13px;margin-bottom:11px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.75)">
+          <strong style="color:var(--sun2);display:block;margin-bottom:4px">Locking PLS as collateral</strong>
+          Depositing PLS wraps it to WPLS and stores it securely in the vault contract. You can deposit as much as you want — there is no maximum. Each deposit resets the 5-minute withdrawal cooldown (a security measure to prevent flash loan attacks). Depositing alone does not create any debt — you can deposit and wait as long as you like before minting SunPLS.
+        </div>
         <div class="field-label">PLS amount</div>
         <input id="depositAmt" type="number" step="1" placeholder="e.g. 1000" />
         <div class="preview" id="depositPreview"></div>
         <button class="btn btn-gold" id="depositBtn" disabled>Deposit PLS</button>
-        <div class="helper">Lock PLS collateral · 5-min withdrawal cooldown starts</div>
+        <div class="helper">Lock PLS collateral · 5-min withdrawal cooldown starts after each deposit</div>
         <div id="emergencyCard" style="display:none;margin-top:10px">
           <button class="btn btn-red" id="emergencyBtn" disabled>Emergency Unlock (30-day Recovery)</button>
           <div class="preview" id="emergencyPreview"></div>
@@ -492,51 +504,70 @@
 
       <!-- MINT TAB -->
       <div class="tab-content" id="tab-mint" style="margin-top:12px">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:11px 13px;margin-bottom:11px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.75)">
+          <strong style="color:var(--sun2);display:block;margin-bottom:4px">Borrowing SunPLS against your collateral</strong>
+          Minting creates SunPLS and sends it to your wallet. The contract enforces a minimum 150% collateral ratio — for every 1 SunPLS you mint, you must have at least 1.5 WPLS worth of collateral. As you type, the live preview shows your projected collateral ratio so you can find a safe level. The stability rate (shown on your vault as "Rate APR") begins accruing on your debt from the moment you mint. Tip: stay above 170%+ for a comfortable buffer.
+        </div>
         <div class="field-label">SunPLS to mint</div>
         <input id="mintAmt" type="number" step="0.01" placeholder="e.g. 100" />
         <div class="preview" id="mintPreview"></div>
         <button class="btn btn-gold" id="mintBtn" disabled>Mint SunPLS</button>
-        <div class="helper">Min 150% CR enforced by contract</div>
+        <div class="helper">Min 150% CR enforced by contract · stability rate starts accruing on minted debt</div>
         <div style="margin-top:8px">
           <button class="btn btn-outline" id="mintMaxBtn" disabled>Mint Max Safe (150%)</button>
           <div class="preview" id="mintMaxPreview"></div>
+          <div class="helper">Mints the maximum possible SunPLS at exactly 150% CR — leaves no headroom, only use if you plan to monitor closely</div>
         </div>
       </div>
 
       <!-- REPAY TAB -->
       <div class="tab-content" id="tab-repay" style="margin-top:12px">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:11px 13px;margin-bottom:11px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.75)">
+          <strong style="color:var(--sun2);display:block;margin-bottom:4px">Burning SunPLS to reduce your debt</strong>
+          Repaying burns the SunPLS from your wallet and reduces your outstanding debt balance. There is no cooldown — repay at any time, as many times as you want. Your debt grows continuously if the stability rate is positive, so repaying regularly keeps your vault healthy. You can repay any amount from a fraction of your debt up to the full balance. The contract will never let you repay more than your current debt.
+        </div>
         <div class="field-label">SunPLS to repay</div>
         <input id="repayAmt" type="number" step="0.01" placeholder="e.g. 50" />
         <div class="preview" id="repayPreview"></div>
         <button class="btn btn-gold" id="repayBtn" disabled>Repay Debt</button>
-        <div class="helper">Burn SunPLS to reduce debt · instant, no cooldown</div>
+        <div class="helper">Burns SunPLS and reduces your debt · instant, no cooldown, no fee</div>
         <div style="margin-top:8px">
           <button class="btn btn-outline" id="repayToSafeBtn" disabled>Repay to Safe (150%)</button>
           <div class="preview" id="repayToSafePreview"></div>
+          <div class="helper">Auto-calculates and repays exactly what's needed to return your CR to 150% — the safest minimum repayment</div>
         </div>
         <div style="margin-top:8px">
           <button class="btn btn-outline" id="checkRiskBtn" disabled>Check Liquidation Risk</button>
           <div id="riskResult" style="margin-top:8px;text-align:center;font-weight:700;min-height:1.2em"></div>
+          <div class="helper">Checks your current vault ratio and tells you if liquidators or redeemers can currently act on your position</div>
         </div>
       </div>
 
       <!-- WITHDRAW TAB -->
       <div class="tab-content" id="tab-withdraw" style="margin-top:12px">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:11px 13px;margin-bottom:11px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.75)">
+          <strong style="color:var(--sun2);display:block;margin-bottom:4px">Reclaiming your PLS collateral</strong>
+          Withdrawing pulls PLS back from your vault to your wallet. Two rules apply: your CR must stay at or above 150% after the withdrawal (unless you have zero debt, in which case you can take everything), and you must wait 5 minutes after your most recent deposit. The cooldown banner appears automatically when your withdrawal is locked. If you have outstanding debt, use "Withdraw Max Safe" to automatically calculate the maximum you can take out while remaining safe.
+        </div>
         <div class="field-label">PLS amount</div>
         <input id="withdrawAmt" type="number" step="1" placeholder="e.g. 500" />
         <div class="preview" id="withdrawPreview"></div>
         <button class="btn btn-gold" id="withdrawBtn" disabled>Withdraw PLS</button>
-        <div class="helper">Ratio must stay above 150% · 5-min cooldown after deposit</div>
+        <div class="helper">CR must stay ≥ 150% after withdrawal · 5-min cooldown applies after each deposit</div>
         <div class="warn-box" id="cooldownWarn" style="display:none">Cooldown active — withdrawal locked</div>
         <div style="margin-top:8px">
           <button class="btn btn-purple" id="withdrawMaxBtn" disabled>Withdraw Max Safe (Stay 150%)</button>
           <div class="preview" id="withdrawMaxPreview"></div>
+          <div class="helper">Calculates the maximum PLS you can withdraw while keeping CR at exactly 150% — safest way to extract collateral without risking your position</div>
         </div>
-        <div style="margin-top:8px">
+        <div style="margin-top:12px;border-top:1px solid rgba(6,182,212,0.15);padding-top:12px">
+          <div style="font-size:0.82em;color:rgba(254,243,199,0.6);margin-bottom:8px;line-height:1.55">
+            <strong style="color:var(--cyan2);display:block;margin-bottom:3px">Redeem SunPLS for PLS</strong>
+            If you hold SunPLS and want to convert it back to PLS without selling on the AMM, you can redeem it at the guaranteed R rate. Redemptions burn your SunPLS and pull PLS directly from undercollateralized vaults (those below 150% CR). You always receive exactly R WPLS per SunPLS — no price impact, no slippage. A 0.5% fee stays with the vault owner. Opens the Vault Dashboard to find eligible vaults.
+          </div>
           <button class="btn btn-cyan" onclick="window.location.href='liquidations.html?t='+Date.now()">
             Redeem SunPLS for PLS →
           </button>
-          <div class="helper">Opens Vault Dashboard — find eligible vaults to redeem against</div>
         </div>
       </div>
     </div>
@@ -682,42 +713,112 @@
 
   <!-- HOW TO MODAL -->
   <div class="modal" id="howModal">
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:88vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(245,158,11,0.3) transparent">
       <span class="modal-close" onclick="document.getElementById('howModal').style.display='none'">×</span>
-      <h3>SunPLS v2 Guide</h3>
-      <h4>Quickest Method — Auto Tab</h4>
-      <ul>
-        <li>Enter PLS amount → <strong>1-Click Auto Mint</strong></li>
-        <li>Deposits &amp; mints in one transaction at 155% CR</li>
+      <h3 style="font-size:1.3em;margin-bottom:4px">SunPLS v2 — Complete Guide</h3>
+      <p style="color:var(--muted);font-size:0.82em;margin-bottom:18px">Autonomous PLS-backed CDP protocol on PulseChain</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px">What is SunPLS?</h4>
+      <p style="font-size:0.88em;line-height:1.7;color:rgba(254,243,199,0.85);margin-bottom:10px">SunPLS is a decentralized borrowing protocol. You deposit PLS as collateral and borrow SunPLS against it. SunPLS is pegged to PLS itself — 1 SunPLS targets a value of 1 WPLS at launch, managed autonomously by an on-chain rate engine. There are no admin keys, no owner functions, and no way to upgrade or pause the contracts. This protocol runs forever without human intervention.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">P vs R — The Two Prices</h4>
+      <p style="font-size:0.88em;line-height:1.7;color:rgba(254,243,199,0.85);margin-bottom:8px">Two prices govern your vault at all times:</p>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong style="color:var(--sun2)">P (Oracle Price)</strong> — the live AMM market price of SunPLS in WPLS, read from the PulseX pair via time-weighted average. This is what the market currently values SunPLS at.</li>
+        <li><strong style="color:var(--purple2)">R (Redemption Value)</strong> — the protocol's target rate. When you redeem SunPLS, you receive exactly R WPLS per SunPLS burned. R starts at 1.0 WPLS and drifts slowly based on market conditions.</li>
       </ul>
-      <h4>Manual Flow</h4>
-      <ul>
-        <li><strong>Deposit</strong> PLS → lock collateral (5-min cooldown)</li>
-        <li><strong>Mint</strong> SunPLS → borrow against collateral (150% min)</li>
-        <li><strong>Repay</strong> SunPLS → reduce debt (instant)</li>
-        <li><strong>Withdraw</strong> PLS → pull collateral (ratio must stay ≥150%)</li>
+      <p style="font-size:0.86em;line-height:1.7;color:rgba(254,243,199,0.75);margin-bottom:10px">When P &gt; R, the protocol increases the stability rate (borrowing becomes more expensive, discouraging new minting). When P &lt; R, the rate drops or goes negative (borrowing becomes cheap or earns a subsidy). This feedback loop continuously pulls the market price toward R.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Stability Rate — What It Means for You</h4>
+      <p style="font-size:0.88em;line-height:1.7;color:rgba(254,243,199,0.85);margin-bottom:8px">The stability rate is shown on your vault as "Rate (APR)". It is applied continuously to your outstanding debt:</p>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong style="color:var(--risk)">Positive rate (+X%)</strong> — your debt grows over time. If you minted 1,000 SunPLS at +2% APR, after one year you owe ~1,020 SunPLS. Watch this and repay periodically.</li>
+        <li><strong style="color:var(--safe)">Negative rate (−X%)</strong> — your debt shrinks over time. The protocol is subsidizing borrowers to encourage new minting and push the price up. Rare but possible.</li>
+        <li><strong>Zero rate</strong> — debt balance stays fixed. You owe exactly what you minted.</li>
       </ul>
-      <h4>Vault Health Zones</h4>
-      <ul>
-        <li><strong>150%+</strong> → Safe, immune to redemption</li>
-        <li><strong>130–150%</strong> → Redemption eligible</li>
-        <li><strong>Below 110%</strong> → Liquidatable</li>
+      <p style="font-size:0.86em;color:rgba(254,243,199,0.6);margin-bottom:10px">The rate updates each epoch (hourly). Anyone can trigger a new epoch using the "Trigger Epoch" button in the Rate Engine panel.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Step-by-Step: Opening a Vault</h4>
+      <div style="font-size:0.87em;line-height:1.75">
+        <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);border-radius:10px;padding:12px 14px;margin-bottom:9px">
+          <strong style="color:var(--sun2)">Option A — Auto Tab (Fastest)</strong><br/>
+          Enter any PLS amount → click <strong>1-Click Auto Mint</strong>. One transaction deposits your PLS and mints SunPLS at 155% collateral ratio. Done. The 155% target gives you a 5% buffer above the 150% minimum.
+        </div>
+        <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.12);border-radius:10px;padding:12px 14px;margin-bottom:9px">
+          <strong style="color:var(--sun2)">Option B — Manual Flow</strong><br/>
+          <ol style="padding-left:18px;margin-top:6px">
+            <li><strong>Deposit</strong> — Lock PLS as collateral. A 5-minute withdrawal cooldown starts.</li>
+            <li><strong>Mint</strong> — Borrow SunPLS. Must keep CR ≥ 150%. Watch the live preview to check your resulting ratio before confirming.</li>
+            <li><strong>Repay</strong> — Burn SunPLS to reduce your debt. No cooldown, do this anytime.</li>
+            <li><strong>Withdraw</strong> — Pull back PLS collateral. CR must stay ≥ 150% after withdrawal.</li>
+          </ol>
+        </div>
+      </div>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Understanding Your CR (Collateral Ratio)</h4>
+      <p style="font-size:0.88em;line-height:1.7;color:rgba(254,243,199,0.85);margin-bottom:8px">Your CR is the most important number to watch:</p>
+      <div style="font-size:0.86em">
+        <div style="display:flex;gap:8px;margin-bottom:7px;align-items:center"><span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 10px;color:var(--safe);font-weight:700;min-width:80px;text-align:center">150%+</span><span style="color:rgba(254,243,199,0.8)">Safe zone. No one can touch your vault. Aim to stay here.</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:7px;align-items:center"><span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 10px;color:var(--warn);font-weight:700;min-width:80px;text-align:center">130–149%</span><span style="color:rgba(254,243,199,0.8)">Redemption zone. SunPLS holders can redeem against your vault at the R rate — your debt reduces but so does your collateral.</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:7px;align-items:center"><span style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 10px;color:var(--risk);font-weight:700;min-width:80px;text-align:center">&lt; 110%</span><span style="color:rgba(254,243,199,0.8)">Liquidation zone. Bots can repay your debt and claim your collateral plus a bonus. Act immediately.</span></div>
+      </div>
+      <p style="font-size:0.84em;color:rgba(254,243,199,0.6);margin-top:8px;margin-bottom:10px">The gauge on the "My Vault" card animates from green to red as your CR drops. A warning banner appears at the top of the page when your CR reaches dangerous levels.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Collateral Ratio Formula</h4>
+      <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px 14px;font-size:0.86em;font-family:monospace;color:var(--sun2);margin-bottom:10px">
+        CR = (Collateral in WPLS × Oracle Price P) ÷ SunPLS Debt × 100%
+      </div>
+      <p style="font-size:0.85em;color:rgba(254,243,199,0.7);margin-bottom:10px">Example: 1,500 PLS collateral, oracle price 1.0 WPLS/SunPLS, 1,000 SunPLS debt → CR = (1,500 × 1.0) ÷ 1,000 × 100 = 150%. If PLS price falls or your debt accrues interest, CR drops. If PLS price rises, CR improves.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Repay Options Explained</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong>Repay specific amount</strong> — enter any SunPLS amount, reduces debt by that amount instantly</li>
+        <li><strong>Repay to Safe (150%)</strong> — auto-calculates the exact amount needed to return to 150% CR. Use this after a price drop puts you in the redemption zone.</li>
+        <li><strong>Repay All &amp; Withdraw Everything</strong> (Auto tab) — full vault exit in one transaction. Requires SunPLS equal to your current total debt in your wallet.</li>
+        <li><strong>Check Liquidation Risk</strong> — plain-language assessment of your current position and whether liquidators can currently act</li>
       </ul>
-      <h4>SunPLS v2 Improvements</h4>
-      <ul>
-        <li><strong>Surplus buffer</strong> — stability fees build protocol equity</li>
-        <li><strong>Bad debt accounting</strong> — uncovered losses tracked, not silenced</li>
-        <li><strong>Reconciliation</strong> — surplus automatically offsets bad debt</li>
-        <li><strong>.call{value}()</strong> — smart contract callers now work (keepers, bots)</li>
-        <li><strong>Trust-minimized burn</strong> — vault can only burn tokens it holds</li>
-        <li><strong>Min liquidation 5%</strong> — less friction for bots vs 20% in v1</li>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Withdraw Options Explained</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong>Withdraw specific amount</strong> — enter PLS to withdraw; fails if result drops CR below 150%</li>
+        <li><strong>Withdraw Max Safe (Stay 150%)</strong> — automatically calculates and withdraws the maximum possible PLS while keeping CR at exactly 150%</li>
+        <li><strong>5-minute cooldown</strong> — after every deposit, withdrawals are blocked for 5 minutes. This prevents flash loan exploits. The countdown is shown in the cooldown banner.</li>
+        <li><strong>Redeem SunPLS for PLS</strong> — opens the Vault Dashboard where you can burn SunPLS to get collateral PLS from undercollateralized vaults at the guaranteed R rate</li>
       </ul>
-      <h4>Fees</h4>
-      <ul>
-        <li>Dynamic stability rate set by the Controller (can be positive or negative)</li>
-        <li>0.5% redemption fee stays with the vault owner</li>
-        <li>No admin keys. Fully autonomous. Immutable.</li>
+
+      <h4 style="color:var(--cyan);border-bottom:1px solid rgba(6,182,212,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">System State Metrics (New in V2)</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong style="color:var(--cyan2)">Surplus Buffer</strong> — accumulated SunPLS from stability fees. The protocol's safety net against bad debt. A growing surplus means the protocol is healthy and profitable.</li>
+        <li><strong style="color:var(--risk)">Bad Debt</strong> — SunPLS debt that was not covered when a liquidation ran out of collateral. Tracked transparently. Offset by the surplus buffer via reconcile().</li>
+        <li><strong style="color:var(--cyan2)">System Equity</strong> — Surplus Buffer minus Bad Debt. Positive = protocol is solvent. Negative (shown red) = bad debt exceeds fees collected. This is a real-time solvency indicator.</li>
+        <li><strong>System Health</strong> — the weighted average CR across all vaults in the protocol. Green = healthy. A low system health means the protocol as a whole is undercollateralized.</li>
       </ul>
+
+      <h4 style="color:var(--purple2);border-bottom:1px solid rgba(139,92,246,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Rate Engine &amp; Oracle Panel</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong>Trigger Epoch</strong> — advances the rate engine clock. Anyone can do this (permissionless). The engine reads the latest oracle price, recalculates R, and sets the new stability rate for all vaults. Epochs are hourly by default.</li>
+        <li><strong>Update Oracle Price</strong> — stores a fresh snapshot of the AMM reserves. Required if the oracle is more than 24h stale (shown as "Oracle stale" in the Oracle panel). Costs only gas — no economic cost.</li>
+        <li><strong>Limiter Hits</strong> — how many times the Controller hit the DELTA_R_MAX cap per epoch. A high number means heavy P/R divergence is being corrected slowly.</li>
+      </ul>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Protocol Tools (Advanced)</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:10px">
+        <li><strong>Clear Bad Debt</strong> — enter a "zombie vault" address (a vault with zero debt but recorded bad debt). You seize its remaining collateral for free. The bad debt is cleared. You are incentivized to find and clean up these edge cases.</li>
+        <li><strong>Settle Bad Debt</strong> — burn your own SunPLS to directly cancel global bad debt. This is not a personal repayment — it reduces the protocol-level bad debt counter. Community members can use this to improve system equity.</li>
+        <li><strong>Reconcile</strong> — nets the surplus buffer against bad debt. Called automatically inside most vault operations. Manually trigger it to force an accounting update at any time.</li>
+      </ul>
+
+      <h4 style="color:var(--warn);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Emergency Unlock</h4>
+      <p style="font-size:0.87em;line-height:1.7;color:rgba(254,243,199,0.85);margin-bottom:8px">If you have zero debt and cannot withdraw normally (e.g. oracle is offline), you can recover your collateral after 30 days via Emergency Unlock. The button appears automatically in the Deposit tab when the conditions are met. No special action needed — just click it.</p>
+
+      <h4 style="color:var(--sun);border-bottom:1px solid rgba(245,158,11,0.2);padding-bottom:6px;margin-bottom:10px;margin-top:18px">Fees Summary</h4>
+      <ul style="font-size:0.86em;line-height:1.8;padding-left:18px;margin-bottom:6px">
+        <li><strong>Stability rate</strong> — dynamic, set by the Controller each epoch. Can be positive or negative. Shown as "Rate (APR)" on your vault.</li>
+        <li><strong>Redemption fee</strong> — 0.5% of the collateral paid out, stays with the vault owner being redeemed against. Not charged to the redeemer.</li>
+        <li><strong>No deposit fee, no mint fee, no withdrawal fee</strong></li>
+        <li><strong>No admin fees</strong> — the protocol has no treasury address. Surplus buffer stays inside the contract as a safety reserve.</li>
+      </ul>
+      <p style="font-size:0.82em;color:rgba(254,243,199,0.4);margin-top:14px;text-align:center">No admin keys · No upgrades · Immutable · Ownerless · PulseChain</p>
     </div>
   </div>
 
