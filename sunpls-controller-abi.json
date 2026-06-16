@@ -1,0 +1,770 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_oracle",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_initialR",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_epochDuration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_k",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_alpha",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "name": "EmergencyRate",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "epochNumber",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "vaultHealth",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "forcedRate",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "EpochFrozen",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "epochNumber",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "EpochTriggered",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "epochNumber",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceP",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "redemptionR",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRate",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "epsilon",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "limiterHit",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "oracleMode",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "effectiveKBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "OracleFallback",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "epochNumber",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "mode",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "priceUsed",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceAge",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "effectiveKBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "VaultSet",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "VaultUpdateFailed",
+    "type": "event",
+    "inputs": [
+      {
+        "name": "epochNumber",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "attemptedRate",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "name": "ALPHA",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "DEADBAND",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "DELTA_R_MAX",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "EMERGENCY_HEALTH_THRESHOLD",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "EPOCH_DURATION",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "K",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "MAX_P_AGE",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "MAX_RATE",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "MAX_R_MOVE_BPS",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "MIN_RATE",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "R",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "R_FLOOR",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "deadbandSkips",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "emergencyEpochs",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "epochCount",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "frozenEpochs",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "getCurrentState",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "redemptionValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "currentRate",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "lastEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "timeUntilNext",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "epochs",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limiterHitCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadbandSkipCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "oracleFallbackCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "frozenEpochCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "canTrigger",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "storedPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "storedPriceAge",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "getParameters",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "epochDuration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "kGain",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "alphaDamping",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadband",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deltaRMax",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "minRate",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "maxRate",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "rFloor",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxPAge",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxRMoveBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "lastEpochTime",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "lastKnownP",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "lastKnownPTime",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "limiterHits",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "oracle",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IProjectUSDOracle"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "oracleFallbacks",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "oracleStatus",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "oracleReportsHealthy",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "controllerHasStoredPrice",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "storedPriceAge",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "storedPriceUsable",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "currentEffectiveKBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedMode",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "previewNextEpoch",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "expectedRate",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "expectedR",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedEpsilon",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "wouldTriggerLimiter",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "inDeadband",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "wouldFreeze",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "expectedOracleMode",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "effectiveKBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "r",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "setVault",
+    "type": "function",
+    "inputs": [
+      {
+        "name": "_vault",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "name": "triggerEpoch",
+    "type": "function",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "name": "vault",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IProjectUSDVault"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "vaultSet",
+    "type": "function",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

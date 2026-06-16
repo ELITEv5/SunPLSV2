@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>SunPLS v2 — Vault Dashboard</title>
+  <link rel="icon" href="sunplslogo.png" type="image/png" />
+  <meta name="theme-color" content="#f59e0b" />
+  <script>
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && !navigator.userAgent.includes("MetaMaskMobile")) {
+      const url = location.origin + location.pathname + location.search + location.hash;
+      location.replace(/iPhone|iPad|iPod/i.test(navigator.userAgent)
+        ? "metamask://dapp/" + url.replace(/^https?:\/\//, '')
+        : "https://metamask.app.link/dapp/" + encodeURIComponent(url));
+    }
+  </script>
+  <script src="ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:     #050010;
+      --bg2:    #0a0020;
+      --sun:    #f59e0b;
+      --sun2:   #fbbf24;
+      --sun3:   #fde047;
+      --cyan:   #06b6d4;
+      --cyan2:  #22d3ee;
+      --purple: #8b5cf6;
+      --purple2:#a78bfa;
+      --glow:   rgba(245,158,11,0.4);
+      --cglow:  rgba(6,182,212,0.35);
+      --pglow:  rgba(139,92,246,0.35);
+      --text:   #fef3c7;
+      --muted:  #92400e;
+      --safe:   #10b981;
+      --warn:   #f59e0b;
+      --risk:   #ef4444;
+      --card:   rgba(245,158,11,0.05);
+      --border: rgba(245,158,11,0.2);
+      --cborder:rgba(6,182,212,0.25);
+      --pborder:rgba(139,92,246,0.25);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-y: auto;
+    }
+
+    #stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    #nebula { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; animation: fadeIn 2s ease forwards; }
+    #grid {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2;
+      background-image:
+        linear-gradient(rgba(6,182,212,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6,182,212,0.04) 1px, transparent 1px);
+      background-size: 36px 36px;
+    }
+    @keyframes fadeIn { to { opacity: 1; } }
+
+    /* HEADER NAV */
+    .top-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(5,0,16,0.92); backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(245,158,11,0.15);
+    }
+    .top-brand { display: flex; align-items: center; gap: 10px; }
+    .top-brand img { width: 28px; height: 28px; object-fit: contain; }
+    .top-brand-text { font-weight: 900; font-size: 1.02em; letter-spacing: -0.01em;
+      background: linear-gradient(90deg, var(--sun), var(--cyan2));
+      -webkit-background-clip: text; color: transparent; }
+    .v2-badge {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      padding: 4px 10px; border-radius: 14px;
+      color: #fff; font-weight: 800; font-size: 0.74em; letter-spacing: 0.08em;
+    }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .nav-btn {
+      padding: 8px 14px; font-size: 0.82em; font-weight: 700;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      background: rgba(245,158,11,0.07); color: var(--sun2);
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    }
+    .nav-btn:hover { background: rgba(245,158,11,0.15); box-shadow: 0 0 12px var(--glow); }
+    #walletBtn { border-color: var(--border); }
+    #walletBtn.connected { border-color: var(--sun2); box-shadow: 0 0 12px var(--glow); }
+
+    /* MAIN */
+    .container {
+      position: relative; z-index: 10;
+      max-width: 1100px; width: 97%;
+      margin: 68px auto 60px;
+      padding: 12px 6px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* PAGE HEADER */
+    .page-header {
+      text-align: center; padding: 28px 20px 20px;
+      background: rgba(5,0,16,0.88); backdrop-filter: blur(24px);
+      border: 1.5px solid var(--border); border-radius: 22px;
+      box-shadow: 0 0 50px var(--glow), 0 0 100px rgba(6,182,212,0.1);
+    }
+    .page-header h1 {
+      font-size: 2em; font-weight: 900; letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--risk), var(--sun), var(--cyan2));
+      -webkit-background-clip: text; color: transparent;
+      background-size: 200% auto; animation: shimmerText 5s linear infinite;
+    }
+    @keyframes shimmerText { 0%{background-position:0% center}100%{background-position:200% center} }
+    .page-header .sub { color: rgba(254,243,199,0.55); font-size: 0.88em; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 6px; }
+
+    /* STATS STRIP */
+    .stats-strip {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    }
+    .stat-pill {
+      background: rgba(5,0,16,0.85); backdrop-filter: blur(12px);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 8px; text-align: center;
+    }
+    .stat-pill.cyan { border-color: var(--cborder); }
+    .stat-pill.risk { border-color: rgba(239,68,68,0.3); }
+    .sp-label { color: var(--muted); font-size: 0.68em; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sp-val { font-weight: 800; font-size: 0.96em; margin-top: 3px; }
+    .sp-val.gold { color: var(--sun2); }
+    .sp-val.cyan { color: var(--cyan2); }
+    .sp-val.risk { color: var(--risk); }
+    .sp-val.safe { color: var(--safe); }
+
+    /* TABS */
+    .tab-bar {
+      display: flex; gap: 8px; background: rgba(5,0,16,0.88); backdrop-filter: blur(16px);
+      border: 1.5px solid var(--border); border-radius: 16px; padding: 8px;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px; font-size: 0.86em; font-weight: 700;
+      border: 1.5px solid transparent; border-radius: 10px;
+      color: var(--muted); cursor: pointer; transition: all 0.2s;
+      letter-spacing: 0.04em; text-transform: uppercase; text-align: center;
+      background: transparent;
+    }
+    .tab-btn:hover { color: var(--sun2); background: rgba(245,158,11,0.08); }
+    .tab-btn.active {
+      background: rgba(245,158,11,0.14); border-color: var(--sun2);
+      color: var(--sun2); box-shadow: 0 0 14px rgba(245,158,11,0.2);
+    }
+    .tab-btn.cyan-tab.active { background: rgba(6,182,212,0.12); border-color: var(--cyan); color: var(--cyan2); box-shadow: 0 0 14px var(--cglow); }
+    .tab-btn.purple-tab.active { background: rgba(139,92,246,0.12); border-color: var(--purple); color: var(--purple2); box-shadow: 0 0 14px var(--pglow); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* SCAN / FILTER BAR */
+    .scan-bar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      background: rgba(5,0,16,0.85); border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 12px 14px;
+    }
+    .scan-bar input {
+      flex: 1; min-width: 180px; padding: 9px 12px; font-size: 0.88em; font-weight: 600;
+      background: rgba(7,0,20,0.8); border: 1.5px solid rgba(245,158,11,0.25);
+      border-radius: 8px; color: #fff; outline: none; transition: all 0.2s;
+    }
+    .scan-bar input:focus { border-color: var(--sun2); box-shadow: 0 0 8px rgba(251,191,36,0.2); }
+    .btn-scan {
+      padding: 9px 18px; font-size: 0.88em; font-weight: 700;
+      background: linear-gradient(135deg, var(--sun), var(--sun2));
+      color: #000; border: none; border-radius: 8px; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.03em; white-space: nowrap;
+    }
+    .btn-scan:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-scan:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
+    .scan-status { color: var(--muted); font-size: 0.82em; min-width: 120px; }
+    .scan-progress { height: 3px; background: rgba(245,158,11,0.1); border-radius: 2px; }
+    .scan-progress-fill { height: 100%; background: linear-gradient(90deg, var(--sun), var(--cyan)); border-radius: 2px; transition: width 0.2s ease; }
+
+    /* VAULT TABLE */
+    .table-wrap {
+      overflow-x: auto; border-radius: 14px;
+      border: 1.5px solid var(--border);
+      background: rgba(5,0,16,0.85); backdrop-filter: blur(12px);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+    thead tr { border-bottom: 1.5px solid rgba(245,158,11,0.2); }
+    thead th {
+      padding: 12px 14px; text-align: left; color: var(--sun);
+      font-size: 0.75em; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      white-space: nowrap; user-select: none; cursor: pointer;
+    }
+    thead th:hover { color: var(--sun2); }
+    tbody tr {
+      border-bottom: 1px solid rgba(245,158,11,0.07);
+      transition: background 0.15s;
+    }
+    tbody tr:hover { background: rgba(245,158,11,0.05); }
+    tbody tr:last-child { border-bottom: none; }
+    td { padding: 10px 14px; vertical-align: middle; white-space: nowrap; }
+    .addr { font-family: monospace; font-size: 0.9em; color: var(--text); }
+    .addr a { color: var(--text); text-decoration: none; }
+    .addr a:hover { color: var(--sun2); }
+    .tag {
+      display: inline-block; padding: 3px 8px; border-radius: 6px;
+      font-size: 0.74em; font-weight: 700; letter-spacing: 0.04em;
+    }
+    .tag.liq { background: rgba(239,68,68,0.15); color: var(--risk); border: 1px solid rgba(239,68,68,0.3); animation: pulse 2s ease-in-out infinite; }
+    .tag.red { background: rgba(245,158,11,0.12); color: var(--warn); border: 1px solid rgba(245,158,11,0.3); }
+    .tag.safe { background: rgba(16,185,129,0.1); color: var(--safe); border: 1px solid rgba(16,185,129,0.25); }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.6} }
+    .empty-row td { text-align: center; color: var(--muted); padding: 32px; font-style: italic; }
+
+    /* ACTION BUTTONS IN TABLE */
+    .act-btn {
+      padding: 6px 14px; font-size: 0.8em; font-weight: 700; border: none;
+      border-radius: 7px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.02em;
+      display: inline-block; margin: 2px;
+    }
+    .act-btn.liq { background: linear-gradient(135deg, #dc2626, #f97316); color: #fff; box-shadow: 0 2px 10px rgba(220,38,38,0.4); }
+    .act-btn.liq:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .act-btn.red { background: linear-gradient(135deg, var(--sun), var(--sun2)); color: #000; }
+    .act-btn.red:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .act-btn.dis { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.2); cursor: default; }
+
+    /* LIQUIDATE MODAL */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .modal.open { display: flex; }
+    .modal-body {
+      background: #0a0020; border: 1.5px solid var(--border); border-radius: 20px;
+      padding: 24px 22px; max-width: 460px; width: 100%;
+      box-shadow: 0 10px 60px var(--glow); position: relative;
+    }
+    .modal-close { position: absolute; top: 14px; right: 16px; font-size: 1.6em; cursor: pointer; color: var(--risk); }
+    .modal-title { color: var(--risk); font-size: 1.2em; font-weight: 900; margin-bottom: 16px; }
+    .modal-title.cyan { color: var(--cyan); }
+    .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(245,158,11,0.1); font-size: 0.88em; }
+    .info-row:last-of-type { border-bottom: none; }
+    .info-label { color: var(--muted); }
+    .info-val { font-weight: 700; }
+    .info-val.risk { color: var(--risk); }
+    .info-val.safe { color: var(--safe); }
+    .info-val.gold { color: var(--sun2); }
+    .info-val.cyan { color: var(--cyan2); }
+
+    .field-wrap { margin: 12px 0 8px; }
+    .field-label { font-size: 0.74em; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
+    input[type="number"] {
+      width: 100%; padding: 12px 14px; font-size: 1em; font-weight: 600;
+      background: rgba(7,0,20,0.8); border: 1.5px solid rgba(245,158,11,0.3);
+      border-radius: 10px; color: #fff; outline: none;
+    }
+    input:focus { border-color: var(--sun2); box-shadow: 0 0 10px rgba(251,191,36,0.2); }
+    .preview { color: var(--sun2); font-size: 0.84em; min-height: 1.2em; margin: 4px 0 8px; text-align: center; }
+    .preview.safe { color: var(--safe); }
+    .preview.risk { color: var(--risk); }
+
+    .btn { width: 100%; padding: 13px; font-size: 0.96em; font-weight: 700; border: none; border-radius: 11px; cursor: pointer; letter-spacing: 0.03em; transition: all 0.2s; margin-top: 6px; }
+    .btn-red { background: linear-gradient(135deg, #dc2626, #f97316); color: #fff; box-shadow: 0 4px 18px rgba(220,38,38,0.4); }
+    .btn-red:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+    .btn-cyan { background: linear-gradient(135deg, var(--cyan), var(--cyan2)); color: #000; box-shadow: 0 4px 18px var(--cglow); }
+    .btn-cyan:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+    .btn-gold { background: linear-gradient(135deg, var(--sun), var(--sun2)); color: #000; box-shadow: 0 4px 18px var(--glow); }
+    .btn-gold:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+    .btn:disabled { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.2); cursor: not-allowed; box-shadow: none; transform: none; }
+    .helper { color: rgba(254,243,199,0.4); font-size: 0.76em; text-align: center; margin-top: 6px; font-style: italic; }
+
+    .status-row { text-align: center; min-height: 1.4em; font-weight: 700; padding: 4px 0; }
+    .status-row.ok  { color: var(--safe); }
+    .status-row.err { color: var(--risk); font-size: 0.9em; }
+
+    .warn-box { padding: 8px 12px; border-radius: 8px; font-size: 0.82em; text-align: center; margin: 8px 0; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: var(--warn); }
+    .info-box-c { padding: 8px 12px; border-radius: 8px; font-size: 0.82em; text-align: center; margin: 8px 0; background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.25); color: var(--cyan2); }
+
+    /* SINGLE VAULT LOOKUP */
+    .lookup-panel {
+      background: rgba(5,0,16,0.85); backdrop-filter: blur(12px);
+      border: 1.5px solid var(--pborder); border-radius: 16px; padding: 18px 20px;
+    }
+    .lookup-title { color: var(--purple2); font-size: 0.78em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+    .lookup-row { display: flex; gap: 8px; }
+    .lookup-row input { flex: 1; padding: 10px 12px; font-size: 0.9em; font-weight: 600; background: rgba(7,0,20,0.8); border: 1.5px solid var(--pborder); border-radius: 9px; color: #fff; outline: none; }
+    .lookup-row input:focus { border-color: var(--purple2); }
+    .lookup-btn { padding: 10px 18px; font-size: 0.88em; font-weight: 700; background: linear-gradient(135deg, var(--purple), var(--purple2)); color: #fff; border: none; border-radius: 9px; cursor: pointer; }
+    .lookup-result { margin-top: 12px; }
+
+    /* REDEMPTION SECTION */
+    .redeem-card {
+      background: rgba(5,0,16,0.85); backdrop-filter: blur(12px);
+      border: 1.5px solid var(--cborder); border-radius: 16px; padding: 18px 20px;
+    }
+    .redeem-title { color: var(--cyan); font-size: 0.78em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+    .redeem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .redeem-cell { background: rgba(6,182,212,0.07); border: 1px solid rgba(6,182,212,0.2); border-radius: 9px; padding: 10px; text-align: center; }
+    .rc-label { color: var(--muted); font-size: 0.72em; text-transform: uppercase; }
+    .rc-val { color: var(--cyan2); font-weight: 800; font-size: 0.96em; margin-top: 3px; }
+
+    /* MY WALLET BALANCE */
+    .balance-strip {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+      background: rgba(5,0,16,0.85); border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .bal-item { text-align: center; }
+    .bal-label { color: var(--muted); font-size: 0.72em; text-transform: uppercase; }
+    .bal-val { font-weight: 800; font-size: 0.94em; color: var(--sun2); margin-top: 2px; }
+
+    /* SORTABLE HEADER INDICATOR */
+    .sort-asc::after  { content: " ↑"; color: var(--sun2); }
+    .sort-desc::after { content: " ↓"; color: var(--sun2); }
+
+    /* FILTER CHIPS */
+    .filter-chips { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+    .chip {
+      padding: 5px 13px; border-radius: 20px; font-size: 0.78em; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.03em;
+      border: 1.5px solid rgba(245,158,11,0.2); background: rgba(245,158,11,0.06); color: var(--muted);
+    }
+    .chip:hover { border-color: var(--sun2); color: var(--sun2); }
+    .chip.active { border-color: var(--sun2); background: rgba(245,158,11,0.18); color: var(--sun2); }
+    .chip.risk-chip.active { border-color: var(--risk); background: rgba(239,68,68,0.15); color: var(--risk); }
+    .chip.warn-chip.active { border-color: var(--warn); background: rgba(245,158,11,0.15); color: var(--warn); }
+    .chip.cyan-chip.active { border-color: var(--cyan); background: rgba(6,182,212,0.12); color: var(--cyan2); }
+
+    @media (max-width: 700px) {
+      .stats-strip { grid-template-columns: 1fr 1fr; }
+      .redeem-grid  { grid-template-columns: 1fr; }
+      .balance-strip { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <div id="nebula"></div>
+  <div id="grid"></div>
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="top-brand">
+      <img src="sunplslogo.png" alt="" onerror="this.style.display='none'" />
+      <span class="top-brand-text">SunPLS</span>
+      <span class="v2-badge">V2</span>
+    </div>
+    <div class="top-actions">
+      <div class="nav-btn" onclick="window.location.href='index.html?t='+Date.now()">← Vault</div>
+      <div class="nav-btn" id="walletBtn" onclick="connectWallet()">Connect Wallet</div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <h1>Vault Dashboard</h1>
+      <div class="sub">Liquidations · Redemptions · Protocol State</div>
+    </div>
+
+    <!-- GLOBAL STATS -->
+    <div class="stats-strip">
+      <div class="stat-pill"><div class="sp-label">Total Vaults</div><div class="sp-val gold" id="statVaults">—</div></div>
+      <div class="stat-pill risk"><div class="sp-label">Liquidatable</div><div class="sp-val risk" id="statLiq">—</div></div>
+      <div class="stat-pill"><div class="sp-label">Redeemable</div><div class="sp-val warn" id="statRed">—</div></div>
+      <div class="stat-pill cyan"><div class="sp-label">Oracle Price</div><div class="sp-val cyan" id="statPrice">—</div></div>
+      <div class="stat-pill cyan"><div class="sp-label">R Value</div><div class="sp-val cyan" id="statR">—</div></div>
+    </div>
+
+    <!-- MY BALANCES -->
+    <div class="balance-strip" id="balStrip" style="display:none">
+      <div class="bal-item"><div class="bal-label">My PLS Balance</div><div class="bal-val" id="balPLS">—</div></div>
+      <div class="bal-item"><div class="bal-label">My SunPLS</div><div class="bal-val" id="balSUNPLS">—</div></div>
+      <div class="bal-item"><div class="bal-label">My Vault CR</div><div class="bal-val" id="balCR">—</div></div>
+    </div>
+
+    <!-- STATUS -->
+    <div class="status-row ok"  id="statusEl"></div>
+    <div class="status-row err" id="errorEl"></div>
+
+    <!-- MAIN TABS -->
+    <div class="tab-bar">
+      <div class="tab-btn active" onclick="switchTab('liq',this)">Liquidate</div>
+      <div class="tab-btn cyan-tab" onclick="switchTab('redeem',this)">Redeem</div>
+      <div class="tab-btn" onclick="switchTab('all',this)">All Vaults</div>
+      <div class="tab-btn purple-tab" onclick="switchTab('lookup',this)">Vault Lookup</div>
+    </div>
+
+    <!-- TAB: LIQUIDATE -->
+    <div class="tab-panel active" id="panel-liq">
+      <div class="scan-bar" style="margin-bottom:10px">
+        <span class="scan-status">Ready to scan</span>
+        <div class="filter-chips">
+          <div class="chip risk-chip active" id="chip-liq" onclick="toggleChip('liq')">Liquidatable</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:right">
+          <span style="color:var(--muted);font-size:0.8em" id="liqCount">0 found</span>
+        </div>
+        <button class="btn-scan" id="scanLiqBtn" onclick="startScan('liq')">Scan All Vaults</button>
+      </div>
+      <div class="scan-progress" style="margin-bottom:8px"><div class="scan-progress-fill" id="liqProgress" style="width:0%"></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable('liq','addr')">Vault Owner</th>
+              <th onclick="sortTable('liq','ratio')">CR %</th>
+              <th onclick="sortTable('liq','debt')">Debt</th>
+              <th onclick="sortTable('liq','minRepay')">Min Repay</th>
+              <th onclick="sortTable('liq','reward')">Reward (PLS)</th>
+              <th onclick="sortTable('liq','bonusBps')">Bonus</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="liqTable"><tr class="empty-row"><td colspan="7">Scan to find liquidatable vaults</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: REDEEM -->
+    <div class="tab-panel" id="panel-redeem">
+      <div class="scan-bar" style="margin-bottom:10px">
+        <span class="scan-status">Ready to scan</span>
+        <div class="filter-chips">
+          <div class="chip warn-chip active" id="chip-red" onclick="toggleChip('red')">Redeemable (CR &lt;150%)</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:right">
+          <span style="color:var(--muted);font-size:0.8em" id="redCount">0 found</span>
+        </div>
+        <button class="btn-scan" id="scanRedBtn" onclick="startScan('red')">Scan All Vaults</button>
+      </div>
+      <div class="scan-progress" style="margin-bottom:8px"><div class="scan-progress-fill" id="redProgress" style="width:0%"></div></div>
+      <div class="redeem-card" style="margin-bottom:10px">
+        <div class="redeem-title">Redemption Overview — R value is guaranteed PLS per SunPLS</div>
+        <div class="redeem-grid">
+          <div class="redeem-cell"><div class="rc-label">Redemption R</div><div class="rc-val" id="rc-R">—</div></div>
+          <div class="redeem-cell"><div class="rc-label">Market Price P</div><div class="rc-val" id="rc-P">—</div></div>
+          <div class="redeem-cell"><div class="rc-label">Fee</div><div class="rc-val">0.5% to vault owner</div></div>
+          <div class="redeem-cell"><div class="rc-label">Min CR to Redeem</div><div class="rc-val">&lt; 150%</div></div>
+        </div>
+        <div class="info-box-c">Redeeming burns SunPLS &amp; gives you collateral PLS valued at R — no oracle slippage</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable('red','addr')">Vault Owner</th>
+              <th onclick="sortTable('red','ratio')">CR %</th>
+              <th onclick="sortTable('red','collateral')">Collateral (PLS)</th>
+              <th onclick="sortTable('red','debt')">Debt (SunPLS)</th>
+              <th>Preview Redeem</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="redTable"><tr class="empty-row"><td colspan="6">Scan to find redeemable vaults</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: ALL VAULTS -->
+    <div class="tab-panel" id="panel-all">
+      <div class="scan-bar" style="margin-bottom:10px">
+        <input id="searchInput" type="text" placeholder="Filter by address..." oninput="filterAll()" />
+        <div class="filter-chips">
+          <div class="chip active" id="chip-all-all" onclick="setFilter('all')">All</div>
+          <div class="chip risk-chip" id="chip-all-liq" onclick="setFilter('liq')">Liquidatable</div>
+          <div class="chip warn-chip" id="chip-all-red" onclick="setFilter('red')">Redeemable</div>
+          <div class="chip cyan-chip" id="chip-all-safe" onclick="setFilter('safe')">Safe</div>
+        </div>
+        <button class="btn-scan" id="scanAllBtn" onclick="startScan('all')">Scan All</button>
+      </div>
+      <div class="scan-progress" style="margin-bottom:8px"><div class="scan-progress-fill" id="allProgress" style="width:0%"></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable('all','addr')">#  Vault</th>
+              <th onclick="sortTable('all','ratio')">CR %</th>
+              <th onclick="sortTable('all','collateral')">Collateral (PLS)</th>
+              <th onclick="sortTable('all','debt')">Debt (SunPLS)</th>
+              <th onclick="sortTable('all','mintable')">Mintable</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="allTable"><tr class="empty-row"><td colspan="7">Scan to load all vaults</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: VAULT LOOKUP -->
+    <div class="tab-panel" id="panel-lookup">
+      <div class="lookup-panel">
+        <div class="lookup-title">Inspect Any Vault</div>
+        <div class="lookup-row">
+          <input id="lookupAddr" type="text" placeholder="0x vault owner address..." />
+          <button class="lookup-btn" onclick="lookupVault()">Inspect</button>
+        </div>
+        <div class="lookup-result" id="lookupResult"></div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <!-- LIQUIDATE MODAL -->
+  <div class="modal" id="liqModal">
+    <div class="modal-body">
+      <span class="modal-close" onclick="closeModal('liqModal')">×</span>
+      <div class="modal-title">Liquidate Vault</div>
+      <div id="liqModalInfo"></div>
+      <div class="field-wrap">
+        <div class="field-label">SunPLS to Repay</div>
+        <input id="liqRepayInput" type="number" step="0.01" placeholder="SunPLS amount" oninput="onLiqInput()" />
+      </div>
+      <div class="preview" id="liqPreview"></div>
+      <div class="warn-box">Liquidation requires SunPLS in your wallet. You receive PLS collateral plus bonus.</div>
+      <button class="btn btn-red" id="liqConfirmBtn" onclick="doLiquidate()">Confirm Liquidation</button>
+      <div class="helper" id="liqHelper"></div>
+      <div class="status-row ok"  id="liqStatus"></div>
+      <div class="status-row err" id="liqError"></div>
+    </div>
+  </div>
+
+  <!-- REDEEM MODAL -->
+  <div class="modal" id="redeemModal">
+    <div class="modal-body" style="border-color:var(--cyan)">
+      <span class="modal-close" onclick="closeModal('redeemModal')">×</span>
+      <div class="modal-title cyan">Redeem SunPLS</div>
+      <div id="redeemModalInfo"></div>
+      <div class="field-wrap">
+        <div class="field-label">SunPLS to Burn</div>
+        <input id="redeemInput" type="number" step="0.01" placeholder="SunPLS amount" oninput="onRedeemInput()" />
+      </div>
+      <div class="preview" id="redeemPreview"></div>
+      <div class="info-box-c">You receive PLS valued at R (redemption value) · 0.5% fee goes to vault owner</div>
+      <button class="btn btn-cyan" id="redeemConfirmBtn" onclick="doRedeem()">Confirm Redemption</button>
+      <div class="status-row ok"  id="redeemStatus"></div>
+      <div class="status-row err" id="redeemError"></div>
+    </div>
+  </div>
+
+  <script>
+  const ethers = window.ethers;
+  const PUBLIC_RPC = "https://rpc.pulsechain.com";
+
+  const VAULT_ADDR      = "0x5A87Aa7A3C68ACA0bb0CDe423Bf1f107284135BC";
+  const TOKEN_ADDR      = "0xaac685D900CC42569061d91F6a521658AA397f32";
+  const ORACLE_ADDR     = "0x0A0E4adFBF38Dd227ed25D4f7e48B44D3a6aCa49";
+  const CONTROLLER_ADDR = "0xd231F209aCd14e66cbe72b23a0c5C1105651b4c6";
+
+  const D18 = 10n ** 18n;
+  let provider, signer, vault, token, oracle, controller, account;
+  let roProvider, roVault, roOracle, roController, roToken;
+  let currentPrice = 0n, currentR = D18;
+  let walletConnected = false;
+
+  const statusEl = document.getElementById("statusEl");
+  const errorEl  = document.getElementById("errorEl");
+
+  function fmtE(v, dp = 2) { return Number(ethers.formatEther(v)).toFixed(dp); }
+  function fmtBig(n) {
+    if (n >= 1e9) return (n/1e9).toFixed(2) + "B";
+    if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+    if (n >= 1e3) return (n/1e3).toFixed(2) + "K";
+    return n.toFixed(3);
+  }
+  function shortAddr(a) { return a.slice(0,6) + "..." + a.slice(-4); }
+  function scanUrl(a) { return `https://scan.pulsechain.com/address/${a}`; }
+
+  function setStatus(msg, isErr) {
+    if (isErr) { errorEl.textContent = msg; setTimeout(() => errorEl.textContent="", 12000); }
+    else        { statusEl.textContent = msg; setTimeout(() => statusEl.textContent="", 5000); }
+  }
+
+  async function loadABIs() {
+    const [v, t, o, c] = await Promise.all([
+      fetch("sunpls-vault-v2-abi.json").then(r => r.json()),
+      fetch("sunpls-token-v2-abi.json").then(r => r.json()),
+      fetch("sunpls-oracle-abi.json").then(r => r.json()),
+      fetch("sunpls-controller-abi.json").then(r => r.json())
+    ]);
+    return [v, t, o, c];
+  }
+
+  // ── READ-ONLY INIT ─────────────────────────────────────────────────────────
+  async function initReadOnly() {
+    try {
+      const [VAULT_ABI, TOKEN_ABI, ORACLE_ABI, CTRL_ABI] = await loadABIs();
+      roProvider   = new ethers.JsonRpcProvider(PUBLIC_RPC);
+      roVault      = new ethers.Contract(VAULT_ADDR,      VAULT_ABI,  roProvider);
+      roOracle     = new ethers.Contract(ORACLE_ADDR,     ORACLE_ABI, roProvider);
+      roController = new ethers.Contract(CONTROLLER_ADDR, CTRL_ABI,   roProvider);
+      roToken      = new ethers.Contract(TOKEN_ADDR,      TOKEN_ABI,  roProvider);
+      await loadGlobalStats(roOracle, roController, roVault);
+    } catch (e) { console.warn("Read-only init:", e.message); }
+  }
+
+  async function loadGlobalStats(oracleC, ctrlC, vaultC) {
+    try {
+      const [[p], cs, total] = await Promise.all([
+        oracleC.peek(), ctrlC.getCurrentState(), vaultC.getVaultCount()
+      ]);
+      currentPrice = p;
+      currentR = cs.redemptionValue > 0n ? cs.redemptionValue : D18;
+      document.getElementById("statPrice").textContent = fmtBig(Number(ethers.formatEther(p))) + " WPLS";
+      document.getElementById("statR").textContent     = fmtBig(Number(ethers.formatEther(currentR))) + " WPLS";
+      document.getElementById("statVaults").textContent = total.toString();
+      document.getElementById("rc-R").textContent = fmtBig(Number(ethers.formatEther(currentR))) + " WPLS";
+      document.getElementById("rc-P").textContent = fmtBig(Number(ethers.formatEther(p))) + " WPLS";
+    } catch {}
+  }
+
+  // ── WALLET CONNECT ─────────────────────────────────────────────────────────
+  async function connectWallet() {
+    try {
+      if (!window.ethereum) return alert("Please install MetaMask");
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer   = await provider.getSigner();
+      account  = await signer.getAddress();
+
+      const net = await provider.getNetwork();
+      if (Number(net.chainId) !== 369) {
+        try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{chainId: "0x171"}] }); }
+        catch { return alert("Please switch to PulseChain"); }
+      }
+
+      const [VAULT_ABI, TOKEN_ABI, ORACLE_ABI, CTRL_ABI] = await loadABIs();
+      vault      = new ethers.Contract(VAULT_ADDR,      VAULT_ABI,  signer);
+      token      = new ethers.Contract(TOKEN_ADDR,      TOKEN_ABI,  signer);
+      oracle     = new ethers.Contract(ORACLE_ADDR,     ORACLE_ABI, provider);
+      controller = new ethers.Contract(CONTROLLER_ADDR, CTRL_ABI,   signer);
+
+      walletConnected = true;
+      document.getElementById("walletBtn").textContent = account.slice(0,6) + "..." + account.slice(-4);
+      document.getElementById("walletBtn").classList.add("connected");
+
+      await Promise.all([loadGlobalStats(oracle, controller, vault), loadMyBalances()]);
+      document.getElementById("balStrip").style.display = "grid";
+      document.querySelectorAll(".btn-scan").forEach(b => b.disabled = false);
+    } catch (e) { setStatus(e.message || "Connection failed", true); }
+  }
+
+  async function loadMyBalances() {
+    try {
+      const [plsBal, sunBal, info] = await Promise.all([
+        provider.getBalance(account),
+        token.balanceOf(account),
+        vault.vaultInfo(account)
+      ]);
+      document.getElementById("balPLS").textContent    = fmtBig(Number(ethers.formatEther(plsBal))) + " PLS";
+      document.getElementById("balSUNPLS").textContent = fmtBig(Number(ethers.formatEther(sunBal))) + " SunPLS";
+      const r = Number(info.ratio);
+      const el = document.getElementById("balCR");
+      el.textContent = r > 1e9 ? "No Debt" : r.toFixed(1) + "%";
+      el.style.color = r < 130 ? "var(--risk)" : r < 150 ? "var(--warn)" : "var(--safe)";
+    } catch {}
+  }
+
+  // ── SCANNING ───────────────────────────────────────────────────────────────
+  const scanData = { all: [], liq: [], red: [] };
+  let sortState  = { all: {key:'ratio',asc:true}, liq: {key:'ratio',asc:true}, red: {key:'ratio',asc:true} };
+  let activeAllFilter = "all";
+  let liqFilter = true, redFilter = true;
+
+  function toggleChip(type) {
+    if (type === 'liq') { liqFilter = !liqFilter; document.getElementById("chip-liq").classList.toggle("active", liqFilter); }
+    if (type === 'red') { redFilter = !redFilter; document.getElementById("chip-red").classList.toggle("active", redFilter); }
+  }
+
+  function setFilter(f) {
+    activeAllFilter = f;
+    ["all","liq","red","safe"].forEach(x => {
+      const el = document.getElementById("chip-all-" + x);
+      if (el) el.classList.toggle("active", x === f);
+    });
+    renderAllTable(scanData.all);
+  }
+
+  async function startScan(type) {
+    const vaultC = walletConnected ? vault : roVault;
+    if (!vaultC) return setStatus("Connect wallet or wait for read-only init", true);
+
+    const btn = document.getElementById("scan" + (type==="liq" ? "Liq" : type==="red" ? "Red" : "All") + "Btn");
+    btn.disabled = true; btn.textContent = "Scanning...";
+
+    let total;
+    try { total = Number(await vaultC.getVaultCount()); } catch { btn.disabled = false; btn.textContent = "Scan All Vaults"; return; }
+
+    const results = [];
+    const BATCH   = 8;
+    const progress = document.getElementById(type + "Progress");
+
+    for (let i = 0; i < total; i += BATCH) {
+      const batch = [];
+      for (let j = i; j < Math.min(i + BATCH, total); j++) {
+        batch.push(vaultC.getVaultOwner(j).then(owner =>
+          vaultC.vaultInfo(owner).then(info => ({
+            owner,
+            collateral: info.collateral,
+            debt:       info.debt,
+            collValSunPLS: info.collateralValueInSunPLS,
+            ratio:      Number(info.ratio),
+            mintable:   info.mintable,
+            liquidatable: info.liquidatable,
+            redeemable:   info.redeemable
+          }))
+        ).catch(() => null));
+      }
+      const resolved = (await Promise.all(batch)).filter(Boolean);
+      results.push(...resolved);
+      if (progress) progress.style.width = (Math.min((i + BATCH) / total * 100, 100)) + "%";
+    }
+
+    scanData.all = results;
+
+    if (type === "liq") {
+      scanData.liq = results.filter(v => v.liquidatable);
+      const pending = [];
+      for (const v of scanData.liq) {
+        try { const li = await vaultC.liquidationInfo(v.owner); v.debt = li.debt; v.minRepay = li.minRepay; v.reward = li.reward; v.bonusBps = li.bonusBps; } catch {}
+        pending.push(v);
+      }
+      document.getElementById("liqCount").textContent = scanData.liq.length + " found";
+      document.getElementById("statLiq").textContent  = scanData.liq.length.toString();
+      renderLiqTable(scanData.liq);
+    } else if (type === "red") {
+      scanData.red = results.filter(v => v.redeemable);
+      document.getElementById("redCount").textContent = scanData.red.length + " found";
+      document.getElementById("statRed").textContent  = scanData.red.length.toString();
+      renderRedTable(scanData.red);
+    } else {
+      const liqC = results.filter(v => v.liquidatable);
+      const redC = results.filter(v => v.redeemable);
+      document.getElementById("statLiq").textContent  = liqC.length.toString();
+      document.getElementById("statRed").textContent  = redC.length.toString();
+      renderAllTable(results);
+    }
+
+    if (progress) setTimeout(() => { progress.style.width = "100%"; setTimeout(() => { progress.style.width = "0%"; }, 800); }, 200);
+    btn.disabled = false; btn.textContent = "Scan All Vaults";
+  }
+
+  // ── TABLE RENDERING ────────────────────────────────────────────────────────
+  function sortBy(arr, key, asc) {
+    return [...arr].sort((a, b) => {
+      const av = typeof a[key] === "bigint" ? Number(a[key]) : a[key] ?? 0;
+      const bv = typeof b[key] === "bigint" ? Number(b[key]) : b[key] ?? 0;
+      return asc ? av - bv : bv - av;
+    });
+  }
+
+  function renderLiqTable(rows) {
+    const tbody = document.getElementById("liqTable");
+    if (!rows.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No liquidatable vaults found</td></tr>'; return; }
+    const sorted = sortBy(rows, sortState.liq.key, sortState.liq.asc);
+    tbody.innerHTML = sorted.map(v => `
+      <tr>
+        <td class="addr"><a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
+        <td>${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
+        <td>${v.debt ? fmtBig(Number(ethers.formatEther(v.debt))) : fmtBig(Number(ethers.formatEther(v.debt)))}</td>
+        <td>${v.minRepay ? fmtBig(Number(ethers.formatEther(v.minRepay))) + " SunPLS" : "—"}</td>
+        <td style="color:var(--safe)">${v.reward ? fmtBig(Number(ethers.formatEther(v.reward))) + " PLS" : "—"}</td>
+        <td style="color:var(--sun2)">${v.bonusBps ? (Number(v.bonusBps)/100).toFixed(1) + "%" : "—"}</td>
+        <td>
+          <span class="act-btn liq" onclick="openLiqModal('${v.owner}')">Liquidate</span>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  function renderRedTable(rows) {
+    const tbody = document.getElementById("redTable");
+    if (!rows.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No redeemable vaults found</td></tr>'; return; }
+    const sorted = sortBy(rows, sortState.red.key, sortState.red.asc);
+    tbody.innerHTML = sorted.map(v => `
+      <tr>
+        <td class="addr"><a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
+        <td style="color:${v.ratio < 110 ? 'var(--risk)' : v.ratio < 130 ? 'var(--risk)' : 'var(--warn)'}">${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
+        <td>${fmtBig(Number(ethers.formatEther(v.collateral)))} PLS</td>
+        <td>${fmtBig(Number(ethers.formatEther(v.debt)))} SunPLS</td>
+        <td><span style="color:var(--muted);font-size:0.82em">Enter amount below</span></td>
+        <td><span class="act-btn red" onclick="openRedeemModal('${v.owner}')">Redeem</span></td>
+      </tr>
+    `).join("");
+  }
+
+  function filterAll() {
+    const q = document.getElementById("searchInput").value.toLowerCase();
+    const filtered = scanData.all.filter(v => {
+      if (q && !v.owner.toLowerCase().includes(q)) return false;
+      if (activeAllFilter === "liq")  return v.liquidatable;
+      if (activeAllFilter === "red")  return v.redeemable;
+      if (activeAllFilter === "safe") return !v.liquidatable && !v.redeemable;
+      return true;
+    });
+    renderAllTable(filtered, true);
+  }
+
+  function renderAllTable(rows, noSort) {
+    const filtered = !noSort ? rows.filter(v => {
+      if (activeAllFilter === "liq")  return v.liquidatable;
+      if (activeAllFilter === "red")  return v.redeemable;
+      if (activeAllFilter === "safe") return !v.liquidatable && !v.redeemable;
+      return true;
+    }) : rows;
+
+    const tbody = document.getElementById("allTable");
+    if (!filtered.length) {
+      tbody.innerHTML = scanData.all.length
+        ? '<tr class="empty-row"><td colspan="7">No vaults match filter</td></tr>'
+        : '<tr class="empty-row"><td colspan="7">Scan to load all vaults</td></tr>';
+      return;
+    }
+    const sorted = sortBy(filtered, sortState.all.key, sortState.all.asc);
+    tbody.innerHTML = sorted.map((v, i) => {
+      const tag = v.liquidatable
+        ? '<span class="tag liq">LIQUIDATABLE</span>'
+        : v.redeemable
+          ? '<span class="tag red">REDEEMABLE</span>'
+          : '<span class="tag safe">SAFE</span>';
+      return `
+        <tr>
+          <td class="addr">#${i+1} <a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
+          <td style="color:${v.ratio < 110 ? 'var(--risk)' : v.ratio < 150 ? 'var(--warn)' : 'var(--safe)'};font-weight:700">${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
+          <td>${fmtBig(Number(ethers.formatEther(v.collateral)))} PLS</td>
+          <td>${fmtBig(Number(ethers.formatEther(v.debt)))} SunPLS</td>
+          <td style="color:var(--safe)">${fmtBig(Number(ethers.formatEther(v.mintable)))}</td>
+          <td>${tag}</td>
+          <td>
+            ${v.liquidatable ? `<span class="act-btn liq" onclick="openLiqModal('${v.owner}')">Liq</span>` : ''}
+            ${v.redeemable   ? `<span class="act-btn red" onclick="openRedeemModal('${v.owner}')">Redeem</span>` : ''}
+            ${!v.liquidatable && !v.redeemable ? '<span class="act-btn dis">—</span>' : ''}
+          </td>
+        </tr>`;
+    }).join("");
+  }
+
+  function sortTable(type, key) {
+    const s = sortState[type];
+    if (s.key === key) s.asc = !s.asc;
+    else { s.key = key; s.asc = true; }
+    if (type === "liq") renderLiqTable(scanData.liq);
+    else if (type === "red") renderRedTable(scanData.red);
+    else renderAllTable(scanData.all);
+  }
+
+  // ── VAULT LOOKUP ───────────────────────────────────────────────────────────
+  async function lookupVault() {
+    const addr = document.getElementById("lookupAddr").value.trim();
+    const result = document.getElementById("lookupResult");
+    if (!ethers.isAddress(addr)) { result.innerHTML = '<div style="color:var(--risk);text-align:center;margin-top:10px">Invalid address</div>'; return; }
+
+    result.innerHTML = '<div style="color:var(--muted);text-align:center;margin-top:10px">Loading...</div>';
+    const vaultC  = walletConnected ? vault : roVault;
+    const oracleC = walletConnected ? oracle : roOracle;
+    if (!vaultC) { result.innerHTML = '<div style="color:var(--muted);text-align:center;margin-top:10px">Wait for connection...</div>'; return; }
+
+    try {
+      const info = await vaultC.vaultInfo(addr);
+      const [p] = await oracleC.peek();
+      currentPrice = p;
+
+      const ratio  = Number(info.ratio);
+      const rateAPR = Number(info.rate) / 1e16;
+      const rClass = ratio < 110 ? "risk" : ratio < 150 ? "warn" : "safe";
+
+      let liqHtml = "";
+      if (info.liquidatable) {
+        try {
+          const li = await vaultC.liquidationInfo(addr);
+          liqHtml = `
+            <div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">
+              <div style="color:var(--risk);font-weight:700;margin-bottom:8px">LIQUIDATABLE</div>
+              <div class="info-row"><span class="info-label">Min Repay</span><span class="info-val risk">${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS</span></div>
+              <div class="info-row"><span class="info-label">Reward</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(li.reward)))} PLS</span></div>
+              <div class="info-row"><span class="info-label">Bonus</span><span class="info-val gold">${(Number(li.bonusBps)/100).toFixed(1)}%</span></div>
+              <button class="btn btn-red" onclick="openLiqModal('${addr}')" style="margin-top:8px">Liquidate This Vault</button>
+            </div>`;
+        } catch {}
+      }
+
+      let redHtml = "";
+      if (info.redeemable) {
+        try {
+          const testAmt = info.debt > D18 ? D18 : info.debt;
+          const prev = await vaultC.redemptionPreview(addr, testAmt);
+          redHtml = `
+            <div style="margin-top:10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:10px;padding:12px">
+              <div style="color:var(--cyan2);font-weight:700;margin-bottom:8px">REDEEMABLE (CR &lt; 150%)</div>
+              <div class="info-row"><span class="info-label">R (preview)</span><span class="info-val cyan">${fmtBig(Number(ethers.formatEther(prev.R)))} WPLS</span></div>
+              <div class="info-row"><span class="info-label">PLS per 1 SunPLS</span><span class="info-val cyan">${fmtBig(Number(ethers.formatEther(prev.plsToRedeemer)))} PLS</span></div>
+              <button class="btn btn-cyan" onclick="openRedeemModal('${addr}')" style="margin-top:8px">Redeem Against This Vault</button>
+            </div>`;
+        } catch {}
+      }
+
+      result.innerHTML = `
+        <div style="margin-top:14px">
+          <div class="info-row"><span class="info-label">Address</span><a href="${scanUrl(addr)}" target="_blank" class="info-val gold" style="font-family:monospace;font-size:0.9em">${shortAddr(addr)}</a></div>
+          <div class="info-row"><span class="info-label">Collateral</span><span class="info-val gold">${fmtBig(Number(ethers.formatEther(info.collateral)))} PLS</span></div>
+          <div class="info-row"><span class="info-label">Debt</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS</span></div>
+          <div class="info-row"><span class="info-label">Coll Value</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.collateralValueInSunPLS)))} SunPLS</span></div>
+          <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val ${rClass}">${ratio > 1e9 ? "No Debt" : ratio.toFixed(1) + "%"}</span></div>
+          <div class="info-row"><span class="info-label">Stability Rate</span><span class="info-val ${rateAPR > 0 ? 'risk' : 'safe'}">${(rateAPR >= 0 ? "+" : "") + rateAPR.toFixed(4)}% APR</span></div>
+          <div class="info-row"><span class="info-label">Mintable</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(info.mintable)))} SunPLS</span></div>
+          <div class="info-row"><span class="info-label">Oracle Healthy</span><span class="info-val ${info.oracleHealthy ? 'safe' : 'risk'}">${info.oracleHealthy ? "Yes" : "No"}</span></div>
+          ${liqHtml}${redHtml}
+        </div>`;
+    } catch (e) { result.innerHTML = `<div style="color:var(--risk);text-align:center;margin-top:10px">${e.message}</div>`; }
+  }
+
+  // ── LIQUIDATION MODAL ──────────────────────────────────────────────────────
+  let liqTarget = null, liqInfo = null;
+
+  async function openLiqModal(addr) {
+    if (!walletConnected) return setStatus("Connect wallet to liquidate", true);
+    liqTarget = addr;
+    document.getElementById("liqModal").classList.add("open");
+    document.getElementById("liqModalInfo").innerHTML = '<div style="color:var(--muted);text-align:center">Loading...</div>';
+    document.getElementById("liqRepayInput").value = "";
+    document.getElementById("liqPreview").textContent = "";
+
+    try {
+      const [info, li, sunBal] = await Promise.all([
+        vault.vaultInfo(addr), vault.liquidationInfo(addr), token.balanceOf(account)
+      ]);
+      liqInfo = { info, li, sunBal };
+
+      document.getElementById("liqModalInfo").innerHTML = `
+        <div class="info-row"><span class="info-label">Vault</span><a href="${scanUrl(addr)}" target="_blank" class="info-val gold">${shortAddr(addr)}</a></div>
+        <div class="info-row"><span class="info-label">Collateral Ratio</span><span class="info-val risk">${Number(info.ratio).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="info-label">Total Debt</span><span class="info-val risk">${fmtBig(Number(ethers.formatEther(li.debt)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Min Repay (5%)</span><span class="info-val">${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Max Reward</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(li.reward)))} PLS</span></div>
+        <div class="info-row"><span class="info-label">Bonus BPS</span><span class="info-val gold">${(Number(li.bonusBps)/100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="info-label">My SunPLS</span><span class="info-val ${sunBal >= li.minRepay ? 'safe' : 'risk'}">${fmtBig(Number(ethers.formatEther(sunBal)))} SunPLS</span></div>
+      `;
+
+      document.getElementById("liqRepayInput").placeholder = `Min: ${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS`;
+      document.getElementById("liqHelper").textContent = `Bonus scales from ${(Number(li.bonusBps)/100).toFixed(1)}% at min repay up to maximum as you repay more`;
+    } catch (e) { document.getElementById("liqModalInfo").innerHTML = `<div style="color:var(--risk)">${e.message}</div>`; }
+  }
+
+  async function onLiqInput() {
+    if (!liqInfo) return;
+    const v = parseFloat(document.getElementById("liqRepayInput").value) || 0;
+    const prev = document.getElementById("liqPreview");
+    if (!v) { prev.textContent = ""; return; }
+    const repWei = ethers.parseUnits(v.toString(), 18);
+    const { li } = liqInfo;
+    if (repWei < li.minRepay) {
+      prev.textContent = `Min: ${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS`;
+      prev.className = "preview risk"; return;
+    }
+    const maxRep = li.debt > li.reward ? li.debt : li.reward;
+    if (repWei > li.debt) {
+      prev.textContent = `Exceeds debt — max ${fmtBig(Number(ethers.formatEther(li.debt)))} SunPLS`;
+      prev.className = "preview risk"; return;
+    }
+    // Proportional reward
+    const myReward = (li.reward * repWei) / li.debt;
+    prev.textContent = `You repay ${v.toFixed(4)} SunPLS → receive ≈ ${fmtBig(Number(ethers.formatEther(myReward)))} PLS`;
+    prev.className = "preview safe";
+  }
+
+  async function doLiquidate() {
+    if (!liqTarget || !liqInfo) return;
+    const v = parseFloat(document.getElementById("liqRepayInput").value);
+    if (!v || v <= 0) return;
+    const repWei = ethers.parseUnits(v.toString(), 18);
+    const btn = document.getElementById("liqConfirmBtn");
+    const stEl = document.getElementById("liqStatus");
+    const erEl = document.getElementById("liqError");
+    btn.disabled = true; btn.textContent = "Processing...";
+    stEl.textContent = ""; erEl.textContent = "";
+    try {
+      const allowance = await token.allowance(account, VAULT_ADDR);
+      if (allowance < repWei) {
+        stEl.textContent = "Approving SunPLS...";
+        await (await token.approve(VAULT_ADDR, repWei)).wait();
+      }
+      stEl.textContent = "Liquidating...";
+      await (await vault.liquidate(liqTarget, repWei)).wait();
+      stEl.textContent = "Liquidation successful!";
+      await loadMyBalances();
+      setTimeout(() => closeModal("liqModal"), 3000);
+    } catch (e) { erEl.textContent = e.reason || e.message || "Failed"; }
+    finally { btn.disabled = false; btn.textContent = "Confirm Liquidation"; }
+  }
+
+  // ── REDEMPTION MODAL ───────────────────────────────────────────────────────
+  let redeemTarget = null;
+
+  async function openRedeemModal(addr) {
+    if (!walletConnected) return setStatus("Connect wallet to redeem", true);
+    redeemTarget = addr;
+    document.getElementById("redeemModal").classList.add("open");
+    document.getElementById("redeemModalInfo").innerHTML = '<div style="color:var(--muted);text-align:center">Loading...</div>';
+    document.getElementById("redeemInput").value = "";
+    document.getElementById("redeemPreview").textContent = "";
+
+    try {
+      const [info, sunBal] = await Promise.all([vault.vaultInfo(addr), token.balanceOf(account)]);
+      document.getElementById("redeemModalInfo").innerHTML = `
+        <div class="info-row"><span class="info-label">Vault</span><a href="${scanUrl(addr)}" target="_blank" class="info-val cyan">${shortAddr(addr)}</a></div>
+        <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val warn">${Number(info.ratio).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="info-label">Vault Debt</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Collateral</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.collateral)))} PLS</span></div>
+        <div class="info-row"><span class="info-label">My SunPLS</span><span class="info-val gold">${fmtBig(Number(ethers.formatEther(sunBal)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Eligible</span><span class="info-val ${info.redeemable ? 'safe' : 'risk'}">${info.redeemable ? "Yes" : "No"}</span></div>
+      `;
+      document.getElementById("redeemInput").placeholder = `Max: ${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS`;
+    } catch (e) { document.getElementById("redeemModalInfo").innerHTML = `<div style="color:var(--risk)">${e.message}</div>`; }
+  }
+
+  async function onRedeemInput() {
+    if (!redeemTarget) return;
+    const v = parseFloat(document.getElementById("redeemInput").value) || 0;
+    const prev = document.getElementById("redeemPreview");
+    if (!v) { prev.textContent = ""; return; }
+    try {
+      const amt = ethers.parseUnits(v.toString(), 18);
+      const p = await vault.redemptionPreview(redeemTarget, amt);
+      if (!p.eligible) { prev.textContent = "Not eligible for redemption"; prev.className = "preview risk"; return; }
+      const plsOut = Number(ethers.formatEther(p.plsToRedeemer));
+      const fee    = Number(ethers.formatEther(p.feeToOwner));
+      const R      = Number(ethers.formatEther(p.R));
+      prev.textContent = `Receive ≈ ${fmtBig(plsOut)} PLS · Fee: ${fmtBig(fee)} PLS · R=${fmtBig(R)} WPLS`;
+      prev.className = "preview safe";
+    } catch { prev.textContent = "Preview failed"; prev.className = "preview risk"; }
+  }
+
+  async function doRedeem() {
+    if (!redeemTarget) return;
+    const v = parseFloat(document.getElementById("redeemInput").value);
+    if (!v || v <= 0) return;
+    const amt  = ethers.parseUnits(v.toString(), 18);
+    const btn  = document.getElementById("redeemConfirmBtn");
+    const stEl = document.getElementById("redeemStatus");
+    const erEl = document.getElementById("redeemError");
+    btn.disabled = true; btn.textContent = "Processing...";
+    stEl.textContent = ""; erEl.textContent = "";
+    try {
+      const allowance = await token.allowance(account, VAULT_ADDR);
+      if (allowance < amt) {
+        stEl.textContent = "Approving SunPLS...";
+        await (await token.approve(VAULT_ADDR, amt)).wait();
+      }
+      stEl.textContent = "Redeeming...";
+      await (await vault.redeem(amt, redeemTarget)).wait();
+      stEl.textContent = "Redemption successful!";
+      await loadMyBalances();
+      setTimeout(() => closeModal("redeemModal"), 3000);
+    } catch (e) { erEl.textContent = e.reason || e.message || "Failed"; }
+    finally { btn.disabled = false; btn.textContent = "Confirm Redemption"; }
+  }
+
+  // ── UTILS ──────────────────────────────────────────────────────────────────
+  function closeModal(id) {
+    document.getElementById(id).classList.remove("open");
+  }
+  document.querySelectorAll(".modal").forEach(m => {
+    m.addEventListener("click", e => { if (e.target === m) m.classList.remove("open"); });
+  });
+
+  function switchTab(id, el) {
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById("panel-" + id).classList.add("active");
+    el.classList.add("active");
+  }
+
+  // ── STARFIELD ──────────────────────────────────────────────────────────────
+  const starCanvas = document.getElementById("stars");
+  const sCtx = starCanvas.getContext("2d");
+  let stars = [];
+  function resizeStars() {
+    starCanvas.width = window.innerWidth; starCanvas.height = window.innerHeight;
+    stars = Array.from({length: 100}, () => ({
+      x: Math.random()*starCanvas.width, y: Math.random()*starCanvas.height,
+      r: Math.random()*1.1+0.2, o: Math.random()*0.5+0.1, spd: Math.random()*0.12+0.03
+    }));
+  }
+  function animateStars() {
+    sCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+    stars.forEach(s => {
+      sCtx.beginPath(); sCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      sCtx.fillStyle = `rgba(255,255,255,${s.o})`; sCtx.fill();
+      s.y += s.spd; if (s.y > starCanvas.height) { s.y = 0; s.x = Math.random()*starCanvas.width; }
+    });
+    requestAnimationFrame(animateStars);
+  }
+  window.addEventListener("resize", resizeStars);
+  resizeStars(); animateStars();
+
+  // ── NEBULA ─────────────────────────────────────────────────────────────────
+  const nebula = document.getElementById("nebula");
+  let t = 0;
+  function animateNebula() {
+    t += 0.003;
+    nebula.style.background = `
+      radial-gradient(circle at ${20+Math.sin(t*0.7)*20}% ${20+Math.cos(t*0.8)*15}%, rgba(245,158,11,0.12), transparent 60%),
+      radial-gradient(circle at ${78+Math.cos(t*0.5)*18}% ${70+Math.sin(t*0.6)*14}%, rgba(139,92,246,0.1), transparent 60%),
+      radial-gradient(circle at ${50+Math.sin(t*0.3)*14}% ${48+Math.cos(t*0.4)*12}%, rgba(6,182,212,0.1), transparent 65%)
+    `;
+    requestAnimationFrame(animateNebula);
+  }
+  animateNebula();
+
+  // ── BOOT ───────────────────────────────────────────────────────────────────
+  window.addEventListener("load", initReadOnly);
+  </script>
+</body>
+</html>
