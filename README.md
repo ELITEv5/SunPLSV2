@@ -20,26 +20,21 @@ SunPLS is a decentralized CDP (Collateralized Debt Position) protocol on PulseCh
 7. [The Rate Engine (Controller)](#the-rate-engine-controller)
 8. [The Oracle](#the-oracle)
 9. [How to Use the Protocol](#how-to-use-the-protocol)
-   - [Auto Mode (Recommended)](#auto-mode-recommended)
-   - [Step 1: Deposit PLS](#step-1-deposit-pls)
-   - [Step 2: Mint SunPLS](#step-2-mint-sunpls)
-   - [Step 3: Monitor Your Vault](#step-3-monitor-your-vault)
-   - [Step 4: Repay Debt](#step-4-repay-debt)
-   - [Step 5: Withdraw Collateral](#step-5-withdraw-collateral)
 10. [Vault Health Zones](#vault-health-zones)
 11. [Liquidations](#liquidations)
 12. [Redemptions](#redemptions)
 13. [V2 Protocol Improvements](#v2-protocol-improvements)
-14. [Emergency Unlock](#emergency-unlock)
-15. [Protocol Tools](#protocol-tools)
-16. [System Invariants](#system-invariants)
-17. [Design Goals](#design-goals)
-18. [Deployed Contracts](#deployed-contracts)
-19. [Version History](#version-history)
-20. [Compiling the Contracts](#compiling-the-contracts)
-21. [Security Model](#security-model)
-22. [Frontend Files](#frontend-files)
-23. [Acknowledgements](#acknowledgements)
+14. [Stability Pool](#stability-pool)
+15. [Emergency Unlock](#emergency-unlock)
+16. [Protocol Tools](#protocol-tools)
+17. [System Invariants](#system-invariants)
+18. [Design Goals](#design-goals)
+19. [Deployed Contracts](#deployed-contracts)
+20. [Version History](#version-history)
+21. [Compiling the Contracts](#compiling-the-contracts)
+22. [Security Model](#security-model)
+23. [Frontend Files](#frontend-files)
+24. [Acknowledgements](#acknowledgements)
 
 ---
 
@@ -107,22 +102,25 @@ The token supply expands when users open vaults and mint, and contracts when use
 
 ## System Architecture
 
-The SunPLS protocol is composed of four core components:
+The SunPLS protocol is composed of four core contracts plus an optional stability pool:
 
 ```
-      SunPLS Token
-            │
-            ▼
-        Price Oracle
-            │
-            ▼
-    Monetary Controller
-            │
-            ▼
-        Vault System
+        SunPLS Token
+              │
+              ▼
+          Price Oracle
+              │
+              ▼
+      Monetary Controller
+              │
+              ▼
+          Vault System
+              │
+              ▼
+      Stability Pool (optional)
 ```
 
-Each component performs a dedicated role. The token is minted and burned by the vault. The oracle feeds the market price to the controller. The controller outputs the stability rate and R value used by the vault. No component has privileged access beyond its defined role.
+Each component performs a dedicated role. The token is minted and burned by the vault. The oracle feeds the market price to the controller. The controller outputs the stability rate and R value used by the vault. The stability pool sits alongside the vault as a permissionless liquidation backstop — it calls the vault just like any other liquidator.
 
 ---
 
@@ -195,7 +193,7 @@ The Controller is an autonomous monetary policy engine that runs in epochs (defa
 - Oracle degradation handling
 
 **Epoch triggering:**
-Anyone can click "Trigger Epoch" in the Rate Engine panel to advance the controller. Bots and keeper contracts can also trigger epochs — V2 uses `.call{value}()` throughout, so smart contract callers work without the 2300-gas restriction of V1.
+Anyone can click "Trigger Epoch" in the Rate Engine panel. Bots and keeper contracts can also trigger epochs — V2 uses `.call{value}()` throughout, so smart contract callers work without the 2300-gas restriction of V1.
 
 ---
 
@@ -229,54 +227,30 @@ If you see "Oracle stale" in the Oracle Status panel, click **Update Oracle Pric
 
 ### Auto Mode (Recommended)
 
-The fastest way to get started:
-
-1. Connect your wallet (MetaMask on PulseChain, chain ID 369)
+1. Connect MetaMask on PulseChain (chain ID 369)
 2. Switch to the **Auto** tab
 3. Enter the amount of PLS you want to deposit
-4. The interface previews how much SunPLS you will receive at 155% CR
-5. Click **1-Click Auto Mint**
+4. Click **1-Click Auto Mint**
 
-This executes `depositAndAutoMintPLS()` — a single transaction that deposits PLS as collateral and mints SunPLS, automatically targeting 155% collateralization ratio. This gives you a 5% buffer above the 150% minimum.
+One transaction deposits PLS and mints SunPLS at 155% CR — 5% buffer above the 150% minimum.
 
----
+### Manual Flow
 
-### Step 1: Deposit PLS
+**Deposit:** Lock PLS as collateral. 5-minute withdrawal cooldown begins.
 
-Switch to the **Deposit** tab, enter your PLS amount, click **Deposit PLS**.
-
-**What happens:**
-- Your PLS is wrapped to WPLS and stored in the vault contract as collateral
-- A 5-minute withdrawal cooldown begins (prevents flash loan attacks)
-- Depositing alone creates no debt — you can deposit and wait before minting
-
-You can deposit multiple times. Each deposit resets the 5-minute cooldown.
-
----
-
-### Step 2: Mint SunPLS
-
-Switch to the **Mint** tab, enter the SunPLS amount to borrow, click **Mint SunPLS**.
-
-**What happens:**
-- The contract checks your resulting CR will be at least 150%
-- SunPLS is minted to your wallet
-- Your debt begins accruing the stability rate from this moment
-
-**CR formula:**
+**Mint:** Borrow SunPLS against collateral. Minimum 150% CR enforced on-chain.
 ```
 CR = (Collateral in WPLS × Oracle Price P) ÷ SunPLS Debt × 100%
 ```
-
 Example: 1,500 PLS collateral, P = 1.0 WPLS/SunPLS, 1,000 SunPLS debt → CR = 150%.
 
-The live preview updates as you type. **Mint Max Safe** mints the exact maximum at 150% CR — use with caution, it leaves no headroom.
+**Repay:** Burn SunPLS to reduce debt. Instant, no cooldown, no fee. **Repay to Safe** auto-calculates exact amount to return to 150% CR.
 
----
+**Withdraw:** Pull PLS back to wallet. CR must stay ≥ 150% after withdrawal. **Withdraw Max Safe** calculates and extracts maximum while holding the 150% line.
 
-### Step 3: Monitor Your Vault
+**Full exit:** Auto tab → **Repay All & Withdraw Everything** — single transaction, requires SunPLS equal to current total debt.
 
-Your vault health is shown in the **My Vault** card:
+### Vault Health Monitoring
 
 | Field | What it means |
 |-------|--------------|
@@ -285,45 +259,22 @@ Your vault health is shown in the **My Vault** card:
 | **CR Ratio** | Your collateralization ratio — keep above 150% |
 | **Rate (APR)** | Current stability rate — positive means debt grows |
 | **Coll Value** | Collateral worth in SunPLS at current oracle price |
-| **Mintable** | Additional SunPLS you can borrow at 150% CR |
+| **Mintable** | Additional SunPLS you can borrow and stay at 150% |
 
-The **CR gauge arc** animates green → amber → red as your ratio drops. A warning banner appears at the top when your CR falls below 130%. A pulsing red border appears below 110% — act immediately at this level.
-
----
-
-### Step 4: Repay Debt
-
-**Repay specific amount:** Burns SunPLS and reduces your debt balance. Instant, no cooldown, no fee.
-
-**Repay to Safe (150%):** Auto-calculates and repays exactly what is needed to return to 150% CR. Use this after a price drop to stop being eligible for redemption.
-
-**Check Liquidation Risk:** Plain-language assessment of your current exposure.
-
-**Note on debt accrual:** If the rate is +2% APR and you minted 1,000 SunPLS, after one year you owe ~1,020 SunPLS. Monitor the Rate (APR) field and repay periodically if the rate is positive.
-
----
-
-### Step 5: Withdraw Collateral
-
-**Withdraw specific amount:** Pulls PLS back to your wallet. Fails if result drops CR below 150%.
-
-**Withdraw Max Safe:** Calculates and withdraws maximum PLS while keeping CR at exactly 150%.
-
-**Repay All & Withdraw Everything (Auto tab):** Full vault exit in one transaction. Requires SunPLS equal to current total debt in your wallet.
-
-**5-minute cooldown** applies after every deposit. The cooldown banner appears automatically when active.
+The CR gauge arc animates green → amber → red as your ratio drops. A warning banner appears at the top when your CR falls into the redeemable zone. A pulsing red border appears below 110% — act immediately.
 
 ---
 
 ## Vault Health Zones
 
-| CR Range | Zone | What can happen |
-|----------|------|----------------|
-| **150%+** | Safe | Normal operation. Immune to both redemption and liquidation. |
-| **110–149%** | Redeemable | SunPLS holders can redeem against your vault. They burn SunPLS and take PLS at the R rate. Your debt and collateral both decrease proportionally. A 0.5% fee stays with you. |
-| **Below 110%** | Liquidatable | Liquidators can repay a portion of your debt (minimum 5%) and receive your collateral at a bonus (up to 7%). Act immediately — add collateral or repay debt. |
+| CR Range | Status | What can happen |
+|----------|--------|----------------|
+| **Above 150%** | Safe | Normal operation. Immune to redemption and liquidation. Can mint and withdraw. |
+| **131–150%** | At risk | Cannot mint more. Not yet redeemable. Add collateral before price falls further. |
+| **110–130%** | Redeemable | SunPLS holders can redeem against your vault at R rate. Your debt and collateral decrease proportionally. A 0.5% fee stays with you. |
+| **Below 110%** | Liquidatable | Also redeemable. Liquidators can repay 5%+ of your debt and claim collateral plus bonus (up to 7%). First mover wins — inverted Dutch auction decays the bonus over 3 hours. |
 
-**Recommended target:** 170%+ CR to absorb price swings without falling into the redeemable zone.
+**Recommended target:** 170%+ CR to absorb price swings without entering the redeemable zone.
 
 ---
 
@@ -334,18 +285,17 @@ When a vault's CR falls below 110%, it becomes liquidatable.
 **V2 liquidation mechanics:**
 - **Minimum liquidation:** 5% of outstanding debt (reduced from 20% in V1 — more efficient for bots)
 - **Maximum liquidation:** 100% of debt
-- **Bonus:** 7% at minimum repayment, scaling toward 2% for larger repayments (inverted Dutch auction over 3 hours)
-- **Who can liquidate:** Anyone holding SunPLS
+- **Bonus:** Starts at 7% immediately, decays to 2% over 3 hours — first mover wins
+- **Who can liquidate:** Anyone holding SunPLS, or the Stability Pool acting on their behalf
 
-**Step-by-step:**
+**Step-by-step (manual):**
 1. Open **Vault Dashboard → Liquidate tab**
 2. Click **Scan All Vaults** — finds all vaults below 110% CR
 3. Click **Liquidate** on any eligible vault
-4. Enter SunPLS amount to repay (≥ the minimum shown)
-5. Preview shows exact PLS reward
-6. Click **Confirm Liquidation**
+4. Enter SunPLS amount to repay (≥ minimum shown)
+5. Click **Confirm Liquidation**
 
-The contract takes your SunPLS, burns it, and sends you the equivalent PLS collateral plus the liquidation bonus. Partial liquidations are fully supported — your reward is proportional to the amount you repay.
+The contract takes your SunPLS, burns it, and sends you proportional PLS collateral plus the bonus.
 
 ---
 
@@ -353,26 +303,21 @@ The contract takes your SunPLS, burns it, and sends you the equivalent PLS colla
 
 Redemptions enforce the peg. When SunPLS trades below R, anyone can buy it cheaply on the market and redeem it at the full R rate — extracting the spread as profit.
 
+**Eligibility:** Vaults at or below 130% CR can be redeemed against. Vaults above 130% are completely immune.
+
 **What happens during a redemption:**
-1. You choose a target vault (must be below 150% CR) and specify SunPLS to burn
+1. Choose a target vault (CR ≤ 130%) and specify SunPLS to burn
 2. You receive: `SunPLS amount × R` worth of PLS, minus 0.5% fee
 3. The 0.5% fee goes to the vault owner
 4. The vault's debt decreases by the SunPLS burned
 5. The vault's collateral decreases by the PLS paid out
 
-**Redemptions always execute at R, not the market price.** No slippage. No price impact. You always receive exactly `SunPLS × R` of collateral regardless of current AMM conditions.
+**Redemptions always execute at R, not the market price.** No slippage. No price impact on the redemption itself. Guaranteed rate regardless of AMM conditions.
 
 **Why this creates the peg:**
 If SunPLS = 0.95 WPLS on market but R = 1.00 WPLS, buying SunPLS and redeeming earns +5% risk-free. This arbitrage continues until the market price rises back to R.
 
-**For vault owners:** Keep your CR above 150% to be immune to redemption. If your CR falls into the redeemable zone, you can be redeemed against any time without warning. The 0.5% fee you receive is compensation for the involuntary reduction of your position.
-
-**Step-by-step:**
-1. Open **Vault Dashboard → Redeem tab**
-2. Click **Scan All Vaults** to find vaults below 150% CR
-3. Click **Redeem** on your target vault
-4. Enter SunPLS to burn — preview shows exact PLS output, fee, and R value used
-5. Click **Confirm Redemption**
+**For vault owners:** Maintain CR above 130% to be immune to redemption. The 0.5% fee is compensation for the involuntary reduction of your position.
 
 ---
 
@@ -381,89 +326,118 @@ If SunPLS = 0.95 WPLS on market but R = 1.00 WPLS, buying SunPLS and redeeming e
 SunPLS V2 introduces structural improvements over V1, making the protocol safer at higher TVL and more accessible to keeper bots and DeFi integrations.
 
 ### Surplus Buffer
-
-Every time the stability rate is positive, accrued fees accumulate in a **Surplus Buffer** (measured in SunPLS). This is the protocol's equity — it absorbs bad debt before any systemic risk propagates.
-
-- Grows when the stability rate is positive and debt is outstanding
-- Used to offset bad debt via `reconcile()`
-- Displayed in the System State panel in real time
+Stability fees accumulate as a **Surplus Buffer** (in SunPLS). The protocol's equity — absorbs bad debt before systemic risk propagates. Visible on-chain in the System State panel.
 
 ### Bad Debt Accounting
-
-V1 silently socialized any uncovered liquidation losses. V2 tracks them explicitly:
-
-- `badDebtAccumulated` — total SunPLS debt not covered by any vault's collateral
-- Displayed in the System State panel (red when non-zero)
-- Never disappears until offset by surplus or settled manually
-- **System Equity** = Surplus Buffer − Bad Debt. Positive = solvent. Negative = bad debt exceeds fees collected.
+V1 silently socialized uncovered liquidation losses. V2 tracks them explicitly in `badDebtAccumulated`. **System Equity** = Surplus Buffer − Bad Debt. Positive = solvent. Negative = bad debt exceeds collected fees. Never hidden, always auditable.
 
 ### Reconciliation
+`reconcile()` nets the surplus buffer against bad debt. Called automatically inside vault operations but triggerable by anyone from the Protocol Tools panel.
 
-`reconcile()` is a public, permissionless function that nets the surplus buffer against bad debt. Called automatically inside vault operations but triggerable by anyone at any time from the Protocol Tools panel.
+### Inverted Dutch Auction
+V1 liquidation bonus grew from 2% to 5% over 3 hours — incentivizing bots to *wait*, leaving vaults underwater longer. V2 flips this: bonus starts at 7% and decays to 2% over 3 hours. First mover wins. Bad debt window collapses from hours to minutes.
 
 ### Trust-Minimized Burn
-
-V1 used `burn(address from, amount)` — the vault had direct burning authority over any address. V2 requires users to `approve()` first, then the vault calls `transferFrom(user → vault)` before burning only from its own balance. The vault can never touch tokens it does not hold.
+V1 vault had direct burning authority over any address. V2 requires users to `approve()` first; vault calls `transferFrom(user → vault)` then burns only from its own balance. The vault can never touch tokens it does not hold.
 
 ### EIP-2612 Permit Flows
-
-V2 adds `repayWithPermit`, `liquidateWithPermit`, and `redeemWithPermit`. Users can sign an off-chain permit message instead of a separate `approve` transaction, reducing two-transaction flows to one. Essential for keeper bots and advanced integrations.
+`repayWithPermit`, `liquidateWithPermit`, `redeemWithPermit` — sign off-chain, execute in one transaction. Essential for keeper bots and DeFi integrations.
 
 ### Smart Contract Compatibility
-
-V1 used `.transfer()` (2300 gas stipend) for PLS payments — smart contract recipients with non-trivial `receive()` logic would fail. V2 uses `.call{value}()` throughout. Keeper bots, MEV searchers, and DeFi integrations work without restriction.
+V1 used `.transfer()` (2300 gas stipend) — smart contract recipients failed. V2 uses `.call{value}()` throughout. This is what makes the Stability Pool possible.
 
 ### Reduced Minimum Liquidation
+V1 required liquidators to repay at least 20% of a vault's debt. V2 drops this to 5%, making smaller positions liquidatable by a wider range of bots.
 
-V1 required liquidators to repay at least 20% of a vault's debt per liquidation. V2 drops this to 5%. Smaller positions become liquidatable by a wider range of bots, improving system safety at all TVL levels.
+---
+
+## Stability Pool
+
+The Stability Pool (`SunPLS_StabilityPool.sol`) is a pre-funded liquidation backstop ready to deploy alongside V2 when TVL warrants it. It is not yet deployed.
+
+### What it does
+
+Depositors lock SunPLS into the pool and earn PLS liquidation rewards. When a vault falls below 110% CR, any wallet can trigger the pool to liquidate it — the pool burns its pooled SunPLS and receives the vault's collateral plus bonus. That PLS is distributed proportionally to all current depositors.
+
+This solves the core risk of open-market liquidation: in a fast crash, individual keepers may not hold enough SunPLS or may not be positioned to act. The pool is always loaded and always ready.
+
+### Why it only works with V2
+
+V1 used `.transfer()` (2300 gas) to send PLS to the liquidator. Any smart contract recipient with non-trivial logic in `receive()` would revert. The stability pool contract needs to receive PLS and update internal accounting — impossible under the V1 gas constraint. V2's `.call{value}()` removes this restriction entirely. The stability pool was a design goal of V2.
+
+### Share accounting
+
+Virtual shares represent each depositor's proportional claim on pooled SunPLS. The MasterChef accumulator pattern tracks PLS rewards:
+
+```
+accRewardPerShare += (plsReceived × PRECISION) / totalShares
+pending PLS = shares × accRewardPerShare − rewardDebt
+```
+
+When a liquidation burns pool SunPLS, `totalShares` stays constant and `totalSunPLS` shrinks — each share is worth less SunPLS but has earned PLS. Depositors who joined before a liquidation share in its reward. Depositors who join after start fresh.
+
+### Liquidation flow
+
+```
+1. Caller invokes pool.liquidate(target, amount)
+2. Pool approves vault for exact SunPLS amount
+3. Pool calls vault.liquidate(target, amount)
+4. Vault pulls SunPLS from pool via transferFrom, burns it
+5. Vault sends PLS to pool via .call{value}() → receive()
+6. vault.liquidate() returns
+7. Pool measures balance delta, deducts 0.5% caller tip, distributes rest to depositors
+8. Approval reset to zero
+```
+
+### Caller tip
+
+`CALLER_TIP_BPS = 50` (0.5% of PLS received). Paid directly to whoever triggers the liquidation. The vault's liquidation bonus is 2–7%, so a bot calling the pool earns 0.5% of the pool's take — clear gas incentive without meaningfully reducing depositor yield.
+
+### Security decisions
+
+**`receive()` restricted to vault only.** Random PLS sent directly to the pool would be unrecoverable (no admin, no sweep function) and would inflate `address(this).balance` without entering `accRewardPerShare`, causing accounting drift. The restriction ensures the only PLS that ever lands in `receive()` is legitimate liquidation reward.
+
+**`bonusBps` read before `vault.liquidate()`.** After the vault resolves the position, `liquidationInfo()` returns zero — the pre-liquidation reading is the accurate one.
+
+**Approval reset after every liquidation.** `approve(vault, amount)` then `approve(vault, 0)` — no residual allowance left on the vault.
+
+### Deploy when ready
+
+```
+SunPLS_StabilityPool(
+    address sunpls,  // 0xaac685D900CC42569061d91F6a521658AA397f32
+    address vault    // 0x5A87Aa7A3C68ACA0bb0CDe423Bf1f107284135BC
+)
+```
+
+No owner. No admin. No additional latching required. Users deposit SunPLS immediately after deploy. The vault and token require zero changes — the pool calls them as a standard liquidator.
 
 ---
 
 ## Emergency Unlock
 
-If you have zero debt, collateral locked, and 30 days have passed since your last deposit, you can call `emergencyUnlock()` to recover your collateral regardless of any oracle or protocol state.
-
-**When relevant:**
-- Oracle is permanently offline and normal withdrawal path requires a price check
-- You deposited collateral but never minted, then lost access and later regained it
-- Any edge case where the normal withdrawal path is blocked
-
-The Emergency Unlock button appears automatically in the Deposit tab when conditions are met. Zero debt is required — repay all outstanding SunPLS first.
+If you have zero debt, collateral locked, and 30 days have passed since your last deposit, call `emergencyUnlock()` to recover collateral regardless of oracle state. The button appears automatically in the Deposit tab when conditions are met.
 
 ---
 
 ## Protocol Tools
 
-Three advanced public functions in the **Protocol Tools** panel, callable by anyone:
+Three public functions callable by anyone from the Protocol Tools panel:
 
-### Clear Bad Debt
-```solidity
-vault.clearBadDebt(address zombieVault)
-```
-If a vault has zero debt but recorded bad debt against it (a "zombie vault"), anyone can call this to seize the zombie's remaining collateral. The caller receives the PLS for free. The bad debt entry is cleared. This rewards anyone who processes edge cases and cleans up the accounting.
+**`clearBadDebt(address zombieVault)`** — seize collateral from a vault with zero debt but recorded bad debt. Caller receives the PLS for free. Bad debt entry is cleared.
 
-### Settle Debt
-```solidity
-vault.settleDebt(uint256 amount)
-```
-Anyone can burn their own SunPLS to directly cancel accumulated bad debt at the protocol level. This does not affect the caller's personal vault — it reduces the global `badDebtAccumulated` counter. Community members who want to contribute to protocol health can use this.
+**`settleDebt(uint256 amount)`** — burn your own SunPLS to directly cancel global bad debt. Reduces `badDebtAccumulated`. Does not affect your personal vault.
 
-### Reconcile
-```solidity
-vault.reconcile()
-```
-Nets surplus buffer against bad debt. No economic cost beyond gas. Called automatically inside most vault operations. Trigger manually at any time to force an up-to-date accounting state.
+**`reconcile()`** — net surplus buffer against bad debt. No economic cost beyond gas.
 
 ---
 
 ## System Invariants
 
-The protocol enforces the following invariants at all times:
-
 ```
 I1  — Vault solvency:       CR ≥ 150% required to mint or withdraw
-I2  — Liquidation:          Vaults below 110% CR can be liquidated
-I3  — Redemption:           Only vaults below 150% CR can be redeemed against
+I2  — Liquidation:          Vaults at or below 110% CR can be liquidated
+I3  — Redemption:           Only vaults at or below 130% CR can be redeemed against
 I4  — Price floor:          SunPLS can always be redeemed at R-value (R_FLOOR = 1 WPLS)
 I5  — Oracle resilience:    Stale oracle never blocks deposit, repay, or withdraw
 I6  — Rate safety:          Stability rate bounded by Controller invariants
@@ -474,15 +448,12 @@ I10 — Bad debt tracking:    Residual uncovered liquidation debt recorded, neve
 I11 — Trust-minimized burn: Vault can only burn tokens it holds in its own balance
 I12 — Surplus accounting:   Stability fees accumulate as surplus buffer, not lost
 I13 — Redeem-liq gap:       Vault cannot be liquidated within 5 minutes of redemption
+I14 — Pool isolation:       Stability pool is vault-funded only — no stray ETH entry
 ```
-
-These invariants ensure the system remains safe under degraded conditions — stale oracle, low liquidity, high bad debt, or extreme price moves.
 
 ---
 
 ## Design Goals
-
-SunPLS was designed with the following principles:
 
 - **Fully autonomous monetary policy** — no human required to run the rate engine
 - **No governance control** — no DAO, no multisig, no timelock, no admin
@@ -491,14 +462,13 @@ SunPLS was designed with the following principles:
 - **Oracle failure resilience** — four degradation modes keep the system live
 - **Permissionless operation** — any wallet or contract can interact with any function
 - **Transparent solvency** — surplus buffer and bad debt visible on-chain at all times
-
-The protocol behaves as a self-contained economic machine. It does not require trust in any individual, team, or organization. The code is the bank. The Controller is the central bank policy. The math is the guarantee.
+- **Keeper-friendly** — `.call{value}()`, permit flows, stability pool, and caller tips make automation first-class
 
 ---
 
 ## Deployed Contracts
 
-All contracts deployed on **PulseChain (Chain ID: 369)**. No owner keys. No upgradeability. Immutable.
+All contracts on **PulseChain (Chain ID: 369)**. No owner keys. No upgradeability. Immutable.
 
 ### V2 — Current (Canonical)
 
@@ -510,20 +480,19 @@ All contracts deployed on **PulseChain (Chain ID: 369)**. No owner keys. No upgr
 | **Controller** | `0xd231F209aCd14e66cbe72b23a0c5C1105651b4c6` |
 | **PulseX SunPLS/WPLS Pair** | `0xF003688b899d9f554D705032AE01828Fa0B87054` |
 | **WPLS** | `0xA1077a294dDE1B09bB078844df40758a5D0f9a27` |
+| **Stability Pool** | Not yet deployed — see `contracts/SunPLS_StabilityPool.sol` |
 
-**Token details:**
-- Name: SunPLS | Symbol: SUNPLS | Decimals: 18
-- Standard: ERC20 + ERC20Permit (EIP-2612)
-- Initial supply: 1,000,000,000 minted at deploy to seed the PulseX pair
-- Starting R: 1.0 WPLS (1:1 with PLS — matches R_FLOOR and oracle bootstrap)
+**Token:** ERC20 + ERC20Permit (EIP-2612) · 18 decimals · 1B initial supply
 
 **Vault parameters:**
-- Min collateral ratio: 150% | Liquidation threshold: 110%
-- Redemption threshold: below 150% CR
-- Min liquidation: 5% of debt | Max bonus: 7%
-- Redemption fee: 0.5% (to vault owner)
-- Withdrawal cooldown: 5 minutes | Emergency unlock: 30 days with zero debt
-- Debt ceiling: `uint256.max` (uncapped — real limiters are CR and liquidity)
+- Min collateral ratio: **150%** · Liquidation threshold: **110%**
+- Redemption threshold: **≤ 130% CR**
+- Min liquidation: **5%** of debt · Max bonus: **7%** (decays to 2% over 3h)
+- Redemption fee: **0.5%** to vault owner
+- Withdrawal cooldown: **5 minutes** · Emergency unlock: **30 days** with zero debt
+- Debt ceiling: `uint256.max` — real limiters are CR requirements and liquidity
+
+**Starting R:** 1.0 WPLS — matches `R_FLOOR`, `initialR`, and the 1:1 LP seed so P = R = 1e18 at launch with zero controller spread.
 
 ---
 
@@ -532,24 +501,24 @@ All contracts deployed on **PulseChain (Chain ID: 369)**. No owner keys. No upgr
 | Version | Status | Notes |
 |---------|--------|-------|
 | V1.2 | Deprecated | Inverted oracle price formula — non-functional |
-| V1.3 | Superseded | Redemption threshold was 150% CR |
-| V1.4 | Live (legacy) | Canonical V1 — redemption threshold lowered to 130% CR, on-chain vault enumeration added. Uses `.transfer()` (2300 gas), 20% min liquidation. Safe at current TVL. |
-| V2 | **Current** | Surplus buffer, bad debt accounting, reconcile, `.call{value}()`, 5% min liquidation, EIP-2612 permit flows, trust-minimized burn. Designed for higher TVL. |
+| V1.3 | Superseded | Redemption threshold at 150% CR |
+| V1.4 | Live (legacy) | Redemption threshold lowered to 130% CR. Uses `.transfer()`, 20% min liquidation. Safe at current TVL. |
+| **V2** | **Current** | Surplus buffer, bad debt accounting, inverted Dutch auction, `.call{value}()`, 5% min liquidation, EIP-2612 permit, trust-minimized burn. Designed for higher TVL. |
+| V3 (future) | Planned | Deploy `SunPLS_StabilityPool.sol` when TVL warrants. Zero changes to existing contracts. |
 
-V1.4 remains live and is not being shut down. V1 and V2 are parallel deployments with separate token contracts. V2 is the recommended system for new positions.
+V1.4 remains live and is not being shut down. V1 and V2 are parallel deployments with separate tokens. V2 is the recommended system for new positions.
 
 ---
 
 ## Compiling the Contracts
 
-**⚠️ PulseChain EVM Constraint:** PulseChain supports Shanghai EVM but **not Cancun** opcodes (including `mcopy` / EIP-5656). OpenZeppelin v5 transitively imports `Bytes.sol` which uses `mcopy` — this will fail on PulseChain.
+**⚠️ PulseChain EVM Constraint:** PulseChain supports Shanghai EVM but **not Cancun** (`mcopy` / EIP-5656). OpenZeppelin v5 transitively imports `Bytes.sol` which uses `mcopy` — this will fail on PulseChain. Use OZ v4.9.6 via versioned GitHub URLs.
 
-**Required setup:**
+**Required:**
 - Compiler: `pragma solidity ^0.8.20`
-- OZ version: **v4.9.6 via versioned GitHub URLs** (not npm, which resolves to OZ v5)
-- EVM target: Shanghai
+- OZ: **v4.9.6 via GitHub URLs** (not npm — npm resolves to OZ v5)
+- EVM target: **shanghai**
 
-**GitHub import URLs used in these contracts:**
 ```solidity
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contracts/security/ReentrancyGuard.sol";
@@ -558,53 +527,53 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contr
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contracts/utils/math/Math.sol";
 ```
 
-**Compile in Remix IDE:**
-1. Set compiler to `0.8.20` — do not use 0.8.24+
-2. Set EVM version to `shanghai` in Advanced Compiler Settings
-3. Import the `.sol` files — GitHub URLs resolve OZ v4.9.6 automatically
-4. Deploy via Injected Provider (MetaMask on PulseChain)
+**Compile in Remix:** Set compiler `0.8.20`, EVM version `shanghai`, deploy via Injected Provider.
 
 **Deploy order:**
 ```
-1. Deploy SunPLS_Token_v2    — 1B seed supply minted to deployer
-2. Create PulseX pair        — seed 1:1 (equal SUNPLS and WPLS amounts)
-3. Deploy SunPLS_Oracle      — reads live pair reserves at deploy
-4. Deploy SunPLS_Controller  — initialR = oracle.lastPrice() (= 1e18 at 1:1 seed)
-5. Deploy SunPLS_Vault_v2    — reads oracle.peek() at deploy, must be healthy
-6. token.setVault(vault)     — permanent latch, one-time only
-7. controller.setVault(vault)— permanent latch, one-time only
+1. Deploy SunPLS_Token_v2         — 1B seed supply to deployer
+2. Create PulseX pair             — seed 1:1 (equal SUNPLS and WPLS)
+3. Deploy SunPLS_Oracle           — reads live reserves at deploy
+4. Deploy SunPLS_Controller       — initialR = oracle.lastPrice() = 1e18
+5. Deploy SunPLS_Vault_v2         — reads oracle.peek() at deploy
+6. token.setVault(vault)          — permanent latch, one-time
+7. controller.setVault(vault)     — permanent latch, one-time
+── system is now fully autonomous ──
+8. Deploy SunPLS_StabilityPool    — (when TVL warrants)
+   args: (token address, vault address)
+   No latching required. Zero changes to existing contracts.
 ```
 
-After step 7 the system is fully autonomous. No further deployer action is possible or required.
-
-**Why 1:1 LP seeding:** The oracle bootstraps `lastPrice` from live AMM reserves in its constructor. `initialR` in the Controller is set from `oracle.lastPrice()` at deploy. The LP seed ratio must equal `initialR` so that P = R = 1e18 at launch — zero spread, no rate pressure, system starts in equilibrium. R_FLOOR = 1e18 makes this the only architecturally correct starting point.
+**Why 1:1 LP seeding:** Oracle bootstraps `lastPrice` from reserves at deploy. `initialR` is set from `oracle.lastPrice()`. The seed ratio must equal `initialR` so P = R = 1e18 at launch — zero spread, no rate pressure, system starts in equilibrium.
 
 ---
 
 ## Security Model
 
-**No admin keys.** There are no `onlyOwner` functions in V2 beyond the one-time `setVault()` latch, which becomes permanently inaccessible after being called once. No timelock needed — there is nothing to govern.
+**No admin keys.** `setVault()` is the only privileged function and becomes permanently inaccessible after being called once.
 
-**No upgradeability.** No proxy patterns, no beacon patterns, no delegate calls. The contracts are exactly what was deployed.
+**No upgradeability.** No proxies, no beacons, no delegate calls.
 
-**No oracle manipulation surface.** The oracle uses a stored snapshot rather than a live AMM read — a single-block sandwich cannot influence vault operations.
+**No oracle manipulation.** Stored snapshot TWAP — single-block sandwich cannot influence vault operations.
 
-**Immutable rate engine.** The Controller's parameters (k, alpha, DELTA_R_MAX, R_FLOOR, epoch duration) are set at deploy time and cannot be changed by anyone.
+**Immutable rate engine.** Controller parameters (k, alpha, DELTA_R_MAX, R_FLOOR, epoch duration) are set at deploy and cannot change.
 
-**Trust-minimized token.** The vault can only burn SunPLS it holds in its own balance. Users must explicitly approve before any token transfer. The vault cannot drain wallets.
+**Trust-minimized token.** Vault can only burn SunPLS it holds. Users must approve first. Vault cannot drain wallets.
+
+**Stability pool isolation.** Pool's `receive()` restricted to vault only — no stray ETH entry, no accounting drift.
 
 **What the contracts cannot do:**
 - Mint SunPLS to arbitrary addresses
 - Pause or freeze any function
 - Change liquidation parameters or collateral requirements
-- Withdraw or redirect collateral (it is only released via vault operations)
+- Redirect or withdraw collateral outside of vault operations
 - Modify the fee structure or rate bounds
 
 ---
 
 ## Frontend Files
 
-Self-contained frontend — no build step required. Serve statically or open directly.
+Self-contained — no build step required. Serve statically or open directly.
 
 | File | Purpose |
 |------|---------|
@@ -614,11 +583,15 @@ Self-contained frontend — no build step required. Serve statically or open dir
 | `sunpls-token-v2-abi.json` | Token ABI (ERC20 + ERC20Permit) |
 | `sunpls-oracle-abi.json` | Oracle ABI |
 | `sunpls-controller-abi.json` | Controller ABI |
-| `ethers.umd.min.js` | ethers.js v6 bundled (no CDN dependency) |
+| `ethers.umd.min.js` | ethers.js v6 bundled — no CDN dependency |
 | `sunplslogo.png` | Protocol logo |
-| `contracts/` | Solidity source for all four V2 contracts |
+| `contracts/SunPLS_Token_v2.sol` | Token source |
+| `contracts/SunPLS_Vault_v2.sol` | Vault source |
+| `contracts/SunPLS_Oracle.sol` | Oracle source |
+| `contracts/SunPLS_Controller.sol` | Controller source |
+| `contracts/SunPLS_StabilityPool.sol` | Stability pool — deploy when TVL warrants |
 
-**GitHub Pages:** Push this folder to a GitHub repo, enable Pages on root branch. `index.html` at root is served automatically.
+**GitHub Pages:** Push this folder to a GitHub repo, enable Pages on root branch. `index.html` is served automatically.
 
 ---
 
