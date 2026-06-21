@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>SunPLS v2 — Vault Dashboard</title>
+  <title>SunPLS — Vault Dashboard</title>
   <link rel="icon" href="sunplslogo.png" type="image/png" />
   <meta name="theme-color" content="#f59e0b" />
   <script>
@@ -229,8 +229,9 @@
     .modal.open { display: flex; }
     .modal-body {
       background: #0a0020; border: 1.5px solid var(--border); border-radius: 20px;
-      padding: 24px 22px; max-width: 460px; width: 100%;
+      padding: 24px 22px; max-width: 480px; width: 100%;
       box-shadow: 0 10px 60px var(--glow); position: relative;
+      max-height: 90vh; overflow-y: auto;
     }
     .modal-close { position: absolute; top: 14px; right: 16px; font-size: 1.6em; cursor: pointer; color: var(--risk); }
     .modal-title { color: var(--risk); font-size: 1.2em; font-weight: 900; margin-bottom: 16px; }
@@ -340,7 +341,7 @@
     <div class="top-brand">
       <img src="sunplslogo.png" alt="" onerror="this.style.display='none'" />
       <span class="top-brand-text">SunPLS</span>
-      <span class="v2-badge">V2</span>
+      <span class="v2-badge">FLOAT</span>
     </div>
     <div class="top-actions">
       <div class="nav-btn" onclick="window.location.href='index.html?t='+Date.now()">← Vault</div>
@@ -388,24 +389,25 @@
     <div class="tab-panel active" id="panel-liq">
       <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:14px;padding:16px 18px;margin-bottom:12px">
         <div style="color:var(--risk);font-weight:800;font-size:0.85em;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px">How Liquidations Work</div>
-        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When a vault's collateral ratio (CR) drops below 110%, it becomes liquidatable. This happens when the market price of PLS falls sharply, or when accumulated stability fees have grown the debt balance without the vault owner adding more collateral.</p>
-        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">As a liquidator, you repay some or all of the vault's debt in SunPLS and receive PLS collateral back at a discount — the liquidation bonus. The minimum repayment is 5% of the vault's outstanding debt. The bonus scales based on how much you repay: smaller repayments earn a higher bonus percentage (up to 7%), larger repayments earn a lower percentage (floor ~2%), ensuring the opportunity remains profitable regardless of size.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When a vault's collateral ratio (CR) drops below 110%, it becomes liquidatable. SunPLS has two liquidation paths — whichever is available gets used first.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px"><strong style="color:var(--purple2)">Pool Liquidate (preferred):</strong> If the Stability Pool has SunPLS deposited, you can trigger an instant pool liquidation. The pool absorbs the vault's debt (burns the SunPLS) and receives the PLS collateral as yield for pool depositors. No SunPLS required from you as the caller.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px"><strong style="color:var(--risk)">Auction Liquidate (fallback):</strong> If the pool is empty or insufficient, you can liquidate via Dutch auction — you provide SunPLS and receive PLS collateral. The auction price improves over time, so waiting longer gives a better rate.</p>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
           <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
             <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Trigger CR</div>
             <div style="color:var(--risk);font-weight:800;font-size:1em;margin-top:2px">&lt; 110%</div>
           </div>
-          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
-            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Min Repay</div>
-            <div style="color:var(--risk);font-weight:800;font-size:1em;margin-top:2px">5% of Debt</div>
+          <div style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:9px;text-align:center">
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Pool Path</div>
+            <div style="color:var(--purple2);font-weight:800;font-size:1em;margin-top:2px">Instant</div>
           </div>
           <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:9px;text-align:center">
-            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Bonus Range</div>
-            <div style="color:var(--safe);font-weight:800;font-size:1em;margin-top:2px">2% – 7%</div>
+            <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Auction Path</div>
+            <div style="color:var(--safe);font-weight:800;font-size:1em;margin-top:2px">Dutch Auction</div>
           </div>
         </div>
         <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6">
-          <strong style="color:rgba(254,243,199,0.85)">Step by step:</strong> Click <em>Scan All Vaults</em> → vaults below 110% CR appear in the table → click <em>Liquidate</em> on your target → enter SunPLS amount (≥ minimum shown) → confirm. The contract transfers your SunPLS to the vault (burns it), then sends you PLS collateral equal to your repayment value plus the bonus.
+          <strong style="color:rgba(254,243,199,0.85)">Step by step:</strong> Click <em>Scan All Vaults</em> → vaults below 110% CR appear in the table → click <em>Liquidate</em> on your target → choose Pool Liquidate (instant) or Auction Liquidate (provide SunPLS) → confirm.
         </div>
       </div>
       <div class="scan-bar" style="margin-bottom:10px">
@@ -425,14 +427,12 @@
             <tr>
               <th onclick="sortTable('liq','addr')">Vault Owner</th>
               <th onclick="sortTable('liq','ratio')">CR %</th>
-              <th onclick="sortTable('liq','debt')">Debt</th>
-              <th onclick="sortTable('liq','minRepay')">Min Repay</th>
-              <th onclick="sortTable('liq','reward')">Reward (PLS)</th>
-              <th onclick="sortTable('liq','bonusBps')">Bonus</th>
+              <th onclick="sortTable('liq','collateral')">Collateral (PLS)</th>
+              <th onclick="sortTable('liq','debt')">Debt (SunPLS)</th>
               <th>Action</th>
             </tr>
           </thead>
-          <tbody id="liqTable"><tr class="empty-row"><td colspan="7">Scan to find liquidatable vaults</td></tr></tbody>
+          <tbody id="liqTable"><tr class="empty-row"><td colspan="5">Scan to find liquidatable vaults</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -441,8 +441,8 @@
     <div class="tab-panel" id="panel-redeem">
       <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.2);border-radius:14px;padding:16px 18px;margin-bottom:12px">
         <div style="color:var(--cyan);font-weight:800;font-size:0.85em;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px">How Redemptions Work</div>
-        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">Redemptions are the peg-enforcement mechanism of SunPLS. When SunPLS trades below its R (redemption value) on the open market, you can profitably buy it cheap and redeem it at the full R rate — receiving PLS collateral directly from undercollateralized vaults. This arbitrage loop continuously pulls the market price back toward R.</p>
-        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When you redeem, you burn SunPLS and receive PLS from a specific vault's collateral. The amount you receive is calculated at the current R value — not the market price. This guarantees you always get exactly R WPLS per SunPLS redeemed, regardless of market conditions. A small 0.5% fee from the PLS paid out goes to the vault owner as compensation for having their collateral taken.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">SunPLS is a floating peg asset — it has no fixed price target. R (the redemption value) is set by the controller and drifts slowly based on market pressure. When SunPLS trades below R, you can buy it cheaply on the open market and redeem it against under-collateralized vaults to receive PLS at the R rate — profiting from the spread.</p>
+        <p style="font-size:0.84em;line-height:1.7;color:rgba(254,243,199,0.82);margin-bottom:10px">When you redeem, you burn SunPLS and receive PLS from a specific vault's collateral at the current R value. A small 0.5% fee from the PLS paid out goes to the vault owner as compensation. This arbitrage loop keeps the market price gravitating toward R over time.</p>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
           <div style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:9px;text-align:center">
             <div style="color:rgba(254,243,199,0.5);font-size:0.7em;text-transform:uppercase;letter-spacing:0.05em">Eligible Vaults</div>
@@ -458,10 +458,10 @@
           </div>
         </div>
         <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6;margin-bottom:8px">
-          <strong style="color:rgba(254,243,199,0.85)">The math:</strong> Burn 100 SunPLS → receive (100 × R) WPLS minus 0.5% fee. If R = 1.5 WPLS, you get 149.25 PLS. No slippage, no oracle manipulation, guaranteed rate.
+          <strong style="color:rgba(254,243,199,0.85)">The math:</strong> Burn 100 SunPLS → receive (100 × R) WPLS minus 0.5% fee. If R = 1.5 WPLS, you get ≈ 149.25 PLS. No slippage, no oracle manipulation, guaranteed at R.
         </div>
         <div style="font-size:0.82em;color:rgba(254,243,199,0.6);line-height:1.6">
-          <strong style="color:rgba(254,243,199,0.85)">What happens to the redeemed vault?</strong> The vault's debt decreases by the SunPLS you burned, and its collateral decreases by the PLS paid out. If the vault had 130% CR before your redemption and you partially redeem, it may still have some collateral and debt remaining — it is not liquidated, just trimmed. This gives vault owners an incentive to keep their CR above 150% to avoid being redeemed against.
+          <strong style="color:rgba(254,243,199,0.85)">What happens to the redeemed vault?</strong> The vault's debt decreases by the SunPLS you burned, and its collateral decreases by the PLS paid out. The vault is trimmed, not liquidated. Vault owners are incentivized to keep CR above 150% to avoid being redeemed against.
         </div>
       </div>
       <div class="scan-bar" style="margin-bottom:10px">
@@ -483,7 +483,7 @@
           <div class="redeem-cell"><div class="rc-label">Fee</div><div class="rc-val">0.5% to vault owner</div></div>
           <div class="redeem-cell"><div class="rc-label">Min CR to Redeem</div><div class="rc-val">&lt; 150%</div></div>
         </div>
-        <div class="info-box-c">Redeeming burns SunPLS &amp; gives you collateral PLS valued at R — no oracle slippage</div>
+        <div class="info-box-c">Redeeming burns SunPLS &amp; gives you collateral PLS valued at R — no slippage</div>
       </div>
       <div class="table-wrap">
         <table>
@@ -506,7 +506,7 @@
     <div class="tab-panel" id="panel-all">
       <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:14px 18px;margin-bottom:12px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.72)">
         <strong style="color:var(--sun2);display:block;margin-bottom:5px">Full protocol overview — every registered vault on-chain</strong>
-        Click <em>Scan All</em> to load every vault that has ever interacted with the SunPLS v2 contract. Use the filter chips to narrow down to Liquidatable (&lt;110% CR), Redeemable (&lt;150% CR), or Safe (≥150% CR) vaults. Sort any column by clicking its header. Use the address search box to find a specific wallet. Each row shows the vault's full position — collateral, debt, CR, and status — with direct action buttons to liquidate or redeem where applicable.
+        Click <em>Scan All</em> to load every vault that has ever interacted with the SunPLS protocol. Use the filter chips to narrow down to Liquidatable (&lt;110% CR), Redeemable (&lt;150% CR), or Safe (≥150% CR) vaults. Sort any column by clicking its header. Use the address search box to find a specific wallet. Each row shows the vault's full position — collateral, debt, CR, and status — with direct action buttons to liquidate or redeem where applicable.
       </div>
       <div class="scan-bar" style="margin-bottom:10px">
         <input id="searchInput" type="text" placeholder="Filter by address..." oninput="filterAll()" />
@@ -541,7 +541,7 @@
     <div class="tab-panel" id="panel-lookup">
       <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:14px;padding:14px 18px;margin-bottom:12px;font-size:0.83em;line-height:1.65;color:rgba(254,243,199,0.72)">
         <strong style="color:var(--purple2);display:block;margin-bottom:5px">Deep-inspect any wallet address</strong>
-        Enter any PulseChain wallet address to see the full state of that vault — collateral locked, debt outstanding, current CR, accruing stability rate, how much more they could borrow, and whether the oracle is healthy for their position. If the vault is liquidatable or redeemable, action buttons appear directly in the result so you can act on it immediately. Useful for monitoring specific vaults, tracking your own vault from a read-only device, or due-diligence before a large redemption.
+        Enter any PulseChain wallet address to see the full state of that vault — collateral locked, debt outstanding, current CR, mintable capacity, and whether the vault is liquidatable or redeemable. Action buttons appear directly in the result so you can act immediately. Useful for monitoring specific vaults, tracking your own position from a read-only device, or due-diligence before a large redemption.
       </div>
       <div class="lookup-panel">
         <div class="lookup-title">Inspect Any Vault</div>
@@ -561,13 +561,21 @@
       <span class="modal-close" onclick="closeModal('liqModal')">×</span>
       <div class="modal-title">Liquidate Vault</div>
       <div id="liqModalInfo"></div>
-      <div class="field-wrap">
-        <div class="field-label">SunPLS to Repay</div>
-        <input id="liqRepayInput" type="number" step="0.01" placeholder="SunPLS amount" oninput="onLiqInput()" />
+      <div style="margin:12px 0;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:12px">
+        <div style="color:var(--purple2);font-weight:700;font-size:0.85em;letter-spacing:0.04em;margin-bottom:6px">OPTION 1 — Pool Liquidate (Instant)</div>
+        <div style="font-size:0.82em;color:rgba(254,243,199,0.7);margin-bottom:10px">No SunPLS needed from you. The Stability Pool absorbs the vault's debt instantly — pool depositors receive the WPLS collateral as yield.</div>
+        <button class="btn" style="background:rgba(139,92,246,0.2);border:1.5px solid var(--purple);color:var(--purple2);" id="poolLiqBtn" onclick="doPoolLiquidate()">Pool Liquidate</button>
       </div>
-      <div class="preview" id="liqPreview"></div>
-      <div class="warn-box">Liquidation requires SunPLS in your wallet. You receive PLS collateral plus bonus.</div>
-      <button class="btn btn-red" id="liqConfirmBtn" onclick="doLiquidate()">Confirm Liquidation</button>
+      <div style="margin:12px 0;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
+        <div style="color:var(--risk);font-weight:700;font-size:0.85em;letter-spacing:0.04em;margin-bottom:6px">OPTION 2 — Auction Liquidate</div>
+        <div style="font-size:0.82em;color:rgba(254,243,199,0.7);margin-bottom:10px">You provide SunPLS and receive PLS collateral. Dutch auction — the longer the vault sits under 110%, the better the PLS/SunPLS rate you get.</div>
+        <div class="field-wrap">
+          <div class="field-label">SunPLS to Provide</div>
+          <input id="liqRepayInput" type="number" step="0.01" placeholder="SunPLS amount" oninput="onLiqInput()" />
+        </div>
+        <div class="preview" id="liqPreview"></div>
+        <button class="btn btn-red" id="liqConfirmBtn" onclick="doLiquidate()">Auction Liquidate</button>
+      </div>
       <div class="helper" id="liqHelper"></div>
       <div class="status-row ok"  id="liqStatus"></div>
       <div class="status-row err" id="liqError"></div>
@@ -596,10 +604,10 @@
   const ethers = window.ethers;
   const PUBLIC_RPC = "https://rpc.pulsechain.com";
 
-  const VAULT_ADDR      = "0x5A87Aa7A3C68ACA0bb0CDe423Bf1f107284135BC";
-  const TOKEN_ADDR      = "0xaac685D900CC42569061d91F6a521658AA397f32";
-  const ORACLE_ADDR     = "0x0A0E4adFBF38Dd227ed25D4f7e48B44D3a6aCa49";
-  const CONTROLLER_ADDR = "0xd231F209aCd14e66cbe72b23a0c5C1105651b4c6";
+  const VAULT_ADDR      = "0xAc2309E21F4acA2eC5fB14ae02a78AA0db7691ae";
+  const TOKEN_ADDR      = "0xe4b8EC561f03713207f9669981A0F5D793b0d687";
+  const ORACLE_ADDR     = "0xBac6B5ee10d1de3f3A522948326438A4d059eFB7";
+  const CONTROLLER_ADDR = "0x4360e04780a8D7d930b620275546Df5193A7b6C4";
 
   const D18 = 10n ** 18n;
   let provider, signer, vault, token, oracle, controller, account;
@@ -625,7 +633,25 @@
     else        { statusEl.textContent = msg; setTimeout(() => statusEl.textContent="", 5000); }
   }
 
-  const _VAULT_ABI = [{"inputs":[{"name":"user","type":"address"}],"name":"vaultInfo","outputs":[{"name":"collateral","type":"uint256"},{"name":"debt","type":"uint256"},{"name":"collateralValueInSunPLS","type":"uint256"},{"name":"ratio","type":"uint256"},{"name":"mintable","type":"uint256"},{"name":"rate","type":"int256"},{"name":"redemptionVal","type":"uint256"},{"name":"liquidatable","type":"bool"},{"name":"redeemable","type":"bool"},{"name":"oracleHealthy","type":"bool"},{"name":"systemRatio","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"user","type":"address"}],"name":"liquidationInfo","outputs":[{"name":"debt","type":"uint256"},{"name":"minRepay","type":"uint256"},{"name":"reward","type":"uint256"},{"name":"bonusBps","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"targetVault","type":"address"},{"name":"sunplsAmount","type":"uint256"}],"name":"redemptionPreview","outputs":[{"name":"plsToRedeemer","type":"uint256"},{"name":"feeToOwner","type":"uint256"},{"name":"R","type":"uint256"},{"name":"eligible","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalCollateral","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalDebt","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"systemHealth","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"surplusBuffer","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"badDebtAccumulated","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"systemEquity","outputs":[{"name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DEBT_CEILING","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"user","type":"address"}],"name":"repayToHealth","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"user","type":"address"}],"name":"maxMint","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getVaultCount","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"index","type":"uint256"}],"name":"getVaultOwner","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"","type":"address"}],"name":"vaults","outputs":[{"name":"collateral","type":"uint256"},{"name":"debt","type":"uint256"},{"name":"lastDepositTime","type":"uint256"},{"name":"lastLiquidationTime","type":"uint256"},{"name":"lastDebtAccrual","type":"uint256"},{"name":"undercollateralizedSince","type":"uint256"},{"name":"lastRedemptionTime","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"WITHDRAW_COOLDOWN","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"currentRate","outputs":[{"name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"depositPLS","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"depositAndAutoMintPLS","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"name":"amount","type":"uint256"}],"name":"withdrawPLS","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"amount","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"amount","type":"uint256"}],"name":"repay","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"amount","type":"uint256"},{"name":"deadline","type":"uint256"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"repayWithPermit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"user","type":"address"},{"name":"repayAmount","type":"uint256"}],"name":"liquidate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"user","type":"address"},{"name":"repayAmount","type":"uint256"},{"name":"deadline","type":"uint256"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"liquidateWithPermit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"sunplsAmount","type":"uint256"},{"name":"targetVault","type":"address"}],"name":"redeem","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"sunplsAmount","type":"uint256"},{"name":"targetVault","type":"address"},{"name":"deadline","type":"uint256"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"redeemWithPermit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"repayAndWithdrawAll","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"emergencyUnlock","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"user","type":"address"}],"name":"clearBadDebt","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"amount","type":"uint256"}],"name":"settleDebt","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"reconcile","outputs":[],"stateMutability":"nonpayable","type":"function"},{"name":"Deposit","type":"event","inputs":[{"name":"user","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false}],"anonymous":false},{"name":"Mint","type":"event","inputs":[{"name":"user","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false}],"anonymous":false},{"name":"Repay","type":"event","inputs":[{"name":"user","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false}],"anonymous":false},{"name":"Withdraw","type":"event","inputs":[{"name":"user","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false},{"name":"collateral","type":"uint256","indexed":false}],"anonymous":false},{"name":"Liquidation","type":"event","inputs":[{"name":"vaultOwner","type":"address","indexed":true},{"name":"liquidator","type":"address","indexed":true},{"name":"repaid","type":"uint256","indexed":false},{"name":"reward","type":"uint256","indexed":false},{"name":"bonusBps","type":"uint256","indexed":false}],"anonymous":false},{"name":"Redemption","type":"event","inputs":[{"name":"redeemer","type":"address","indexed":true},{"name":"vaultOwner","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false},{"name":"plsOut","type":"uint256","indexed":false}],"anonymous":false},{"name":"BadDebtCleared","type":"event","inputs":[{"name":"user","type":"address","indexed":true},{"name":"collateral","type":"uint256","indexed":false},{"name":"debt","type":"uint256","indexed":false}],"anonymous":false},{"name":"DebtSettled","type":"event","inputs":[{"name":"settler","type":"address","indexed":true},{"name":"amount","type":"uint256","indexed":false}],"anonymous":false},{"name":"SurplusReconciled","type":"event","inputs":[{"name":"amount","type":"uint256","indexed":false}],"anonymous":false}];
+  const _VAULT_ABI = [
+    {"inputs":[{"name":"owner","type":"address"}],"name":"getVault","outputs":[{"name":"collateral","type":"uint256"},{"name":"debt","type":"uint256"},{"name":"crBps","type":"uint256"},{"name":"liquidatable","type":"bool"},{"name":"redeemable","type":"bool"},{"name":"lastAccrual","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"globalStats","outputs":[{"name":"tvl","type":"uint256"},{"name":"totalMinted","type":"uint256"},{"name":"surplus","type":"uint256"},{"name":"badDebt","type":"uint256"},{"name":"currentRate","type":"int256"},{"name":"redemptionPrice","type":"uint256"},{"name":"systemCR","type":"uint256"},{"name":"debtCeiling","type":"uint256"},{"name":"debtUtilizationBps","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"vaultCount","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"","type":"uint256"}],"name":"vaultOwners","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"","type":"address"}],"name":"vaults","outputs":[{"name":"collateral","type":"uint256"},{"name":"debt","type":"uint256"},{"name":"lastDebtAccrual","type":"uint256"},{"name":"auctionStart","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"owner","type":"address"}],"name":"accruedInterest","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"depositPLS","outputs":[],"stateMutability":"payable","type":"function"},
+    {"inputs":[{"name":"amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"amount","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"amount","type":"uint256"}],"name":"repay","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[],"name":"repayAndClose","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"owner","type":"address"}],"name":"poolLiquidate","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"owner","type":"address"},{"name":"sunplsInput","type":"uint256"}],"name":"auctionLiquidate","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"sunplsIn","type":"uint256"},{"name":"target","type":"address"}],"name":"redeem","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[],"name":"emergencyUnlock","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"owner","type":"address"}],"name":"clearBadDebt","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"amount","type":"uint256"}],"name":"settleDebt","outputs":[],"stateMutability":"nonpayable","type":"function"}
+  ];
   const _TOKEN_ABI = [{"inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"account","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"deadline","type":"uint256"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"permit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"name":"owner","type":"address"}],"name":"nonces","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DOMAIN_SEPARATOR","outputs":[{"name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"vault","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"vaultSet","outputs":[{"name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"}];
   const _ORACLE_ABI = [{"type":"constructor","inputs":[{"name":"_pair","type":"address","internalType":"address"},{"name":"_wpls","type":"address","internalType":"address"},{"name":"_sunpls","type":"address","internalType":"address"}],"stateMutability":"nonpayable"},{"name":"PriceUpdated","type":"event","inputs":[{"name":"price","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"timestamp","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"creeping","type":"bool","indexed":false,"internalType":"bool"}],"anonymous":false},{"name":"MAX_DEVIATION_BPS","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"MAX_PRICE_AGE","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"MIN_TWAP_INTERVAL","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"PRECISION","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"getConfig","type":"function","inputs":[],"outputs":[{"name":"pairAddress","type":"address","internalType":"address"},{"name":"wplsAddress","type":"address","internalType":"address"},{"name":"sunplsAddress","type":"address","internalType":"address"},{"name":"wplsIsToken0Flag","type":"bool","internalType":"bool"},{"name":"maxDeviationBps","type":"uint256","internalType":"uint256"},{"name":"minTwapInterval","type":"uint256","internalType":"uint256"},{"name":"maxPriceAge","type":"uint256","internalType":"uint256"},{"name":"candidateToleranceBps","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"getCreepingState","type":"function","inputs":[],"outputs":[{"name":"pending","type":"uint256","internalType":"uint256"},{"name":"confirmCount","type":"uint8","internalType":"uint8"},{"name":"isCreeping","type":"bool","internalType":"bool"}],"stateMutability":"view"},{"name":"getSpotPrice","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"isHealthy","type":"function","inputs":[],"outputs":[{"name":"","type":"bool","internalType":"bool"}],"stateMutability":"view"},{"name":"lastPrice","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"lastPriceTimestamp","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"lastUpdateTimestamp","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"pair","type":"function","inputs":[],"outputs":[{"name":"","type":"address","internalType":"contract IUniswapV2Pair"}],"stateMutability":"view"},{"name":"peek","type":"function","inputs":[],"outputs":[{"name":"price","type":"uint256","internalType":"uint256"},{"name":"timestamp","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"sunpls","type":"function","inputs":[],"outputs":[{"name":"","type":"address","internalType":"address"}],"stateMutability":"view"},{"name":"update","type":"function","inputs":[],"outputs":[{"name":"price","type":"uint256","internalType":"uint256"},{"name":"timestamp","type":"uint256","internalType":"uint256"}],"stateMutability":"nonpayable"},{"name":"wpls","type":"function","inputs":[],"outputs":[{"name":"","type":"address","internalType":"address"}],"stateMutability":"view"},{"name":"wplsIsToken0","type":"function","inputs":[],"outputs":[{"name":"","type":"bool","internalType":"bool"}],"stateMutability":"view"}];
   const _CTRL_ABI = [{"type":"constructor","inputs":[{"name":"_oracle","type":"address","internalType":"address"},{"name":"_initialR","type":"uint256","internalType":"uint256"},{"name":"_epochDuration","type":"uint256","internalType":"uint256"},{"name":"_k","type":"uint256","internalType":"uint256"},{"name":"_alpha","type":"uint256","internalType":"uint256"}],"stateMutability":"nonpayable"},{"name":"EmergencyRate","type":"event","inputs":[{"name":"epochNumber","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"timestamp","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"vaultHealth","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"forcedRate","type":"int256","indexed":false,"internalType":"int256"}],"anonymous":false},{"name":"EpochFrozen","type":"event","inputs":[{"name":"epochNumber","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"timestamp","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},{"name":"EpochTriggered","type":"event","inputs":[{"name":"epochNumber","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"timestamp","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"priceP","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"redemptionR","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"newRate","type":"int256","indexed":false,"internalType":"int256"},{"name":"epsilon","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"limiterHit","type":"bool","indexed":false,"internalType":"bool"},{"name":"oracleMode","type":"uint8","indexed":false,"internalType":"uint8"},{"name":"effectiveKBps","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},{"name":"OracleFallback","type":"event","inputs":[{"name":"epochNumber","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"mode","type":"uint8","indexed":false,"internalType":"uint8"},{"name":"priceUsed","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"priceAge","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"effectiveKBps","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},{"name":"VaultSet","type":"event","inputs":[{"name":"vault","type":"address","indexed":true,"internalType":"address"}],"anonymous":false},{"name":"VaultUpdateFailed","type":"event","inputs":[{"name":"epochNumber","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"attemptedRate","type":"int256","indexed":false,"internalType":"int256"}],"anonymous":false},{"name":"ALPHA","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"DEADBAND","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"DELTA_R_MAX","type":"function","inputs":[],"outputs":[{"name":"","type":"int256","internalType":"int256"}],"stateMutability":"view"},{"name":"EMERGENCY_HEALTH_THRESHOLD","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"EPOCH_DURATION","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"K","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"MAX_P_AGE","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"MAX_RATE","type":"function","inputs":[],"outputs":[{"name":"","type":"int256","internalType":"int256"}],"stateMutability":"view"},{"name":"MAX_R_MOVE_BPS","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"MIN_RATE","type":"function","inputs":[],"outputs":[{"name":"","type":"int256","internalType":"int256"}],"stateMutability":"view"},{"name":"R","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"R_FLOOR","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"deadbandSkips","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"emergencyEpochs","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"epochCount","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"frozenEpochs","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"getCurrentState","type":"function","inputs":[],"outputs":[{"name":"redemptionValue","type":"uint256","internalType":"uint256"},{"name":"currentRate","type":"int256","internalType":"int256"},{"name":"lastEpoch","type":"uint256","internalType":"uint256"},{"name":"timeUntilNext","type":"uint256","internalType":"uint256"},{"name":"epochs","type":"uint256","internalType":"uint256"},{"name":"limiterHitCount","type":"uint256","internalType":"uint256"},{"name":"deadbandSkipCount","type":"uint256","internalType":"uint256"},{"name":"oracleFallbackCount","type":"uint256","internalType":"uint256"},{"name":"frozenEpochCount","type":"uint256","internalType":"uint256"},{"name":"canTrigger","type":"bool","internalType":"bool"},{"name":"storedPrice","type":"uint256","internalType":"uint256"},{"name":"storedPriceAge","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"getParameters","type":"function","inputs":[],"outputs":[{"name":"epochDuration","type":"uint256","internalType":"uint256"},{"name":"kGain","type":"uint256","internalType":"uint256"},{"name":"alphaDamping","type":"uint256","internalType":"uint256"},{"name":"deadband","type":"uint256","internalType":"uint256"},{"name":"deltaRMax","type":"int256","internalType":"int256"},{"name":"minRate","type":"int256","internalType":"int256"},{"name":"maxRate","type":"int256","internalType":"int256"},{"name":"rFloor","type":"uint256","internalType":"uint256"},{"name":"maxPAge","type":"uint256","internalType":"uint256"},{"name":"maxRMoveBps","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"lastEpochTime","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"lastKnownP","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"lastKnownPTime","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"limiterHits","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"oracle","type":"function","inputs":[],"outputs":[{"name":"","type":"address","internalType":"contract IProjectUSDOracle"}],"stateMutability":"view"},{"name":"oracleFallbacks","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"oracleStatus","type":"function","inputs":[],"outputs":[{"name":"oracleReportsHealthy","type":"bool","internalType":"bool"},{"name":"controllerHasStoredPrice","type":"bool","internalType":"bool"},{"name":"storedPriceAge","type":"uint256","internalType":"uint256"},{"name":"storedPriceUsable","type":"bool","internalType":"bool"},{"name":"currentEffectiveKBps","type":"uint256","internalType":"uint256"},{"name":"expectedMode","type":"uint8","internalType":"uint8"}],"stateMutability":"view"},{"name":"previewNextEpoch","type":"function","inputs":[],"outputs":[{"name":"expectedRate","type":"int256","internalType":"int256"},{"name":"expectedR","type":"uint256","internalType":"uint256"},{"name":"expectedEpsilon","type":"uint256","internalType":"uint256"},{"name":"wouldTriggerLimiter","type":"bool","internalType":"bool"},{"name":"inDeadband","type":"bool","internalType":"bool"},{"name":"wouldFreeze","type":"bool","internalType":"bool"},{"name":"expectedOracleMode","type":"uint8","internalType":"uint8"},{"name":"effectiveKBps","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"name":"r","type":"function","inputs":[],"outputs":[{"name":"","type":"int256","internalType":"int256"}],"stateMutability":"view"},{"name":"setVault","type":"function","inputs":[{"name":"_vault","type":"address","internalType":"address"}],"outputs":[],"stateMutability":"nonpayable"},{"name":"triggerEpoch","type":"function","inputs":[],"outputs":[],"stateMutability":"nonpayable"},{"name":"vault","type":"function","inputs":[],"outputs":[{"name":"","type":"address","internalType":"contract IProjectUSDVault"}],"stateMutability":"view"},{"name":"vaultSet","type":"function","inputs":[],"outputs":[{"name":"","type":"bool","internalType":"bool"}],"stateMutability":"view"}];
@@ -650,7 +676,7 @@
   async function loadGlobalStats(oracleC, ctrlC, vaultC) {
     try {
       const [[p], cs, total] = await Promise.all([
-        oracleC.peek(), ctrlC.getCurrentState(), vaultC.getVaultCount()
+        oracleC.peek(), ctrlC.getCurrentState(), vaultC.vaultCount()
       ]);
       currentPrice = p;
       currentR = cs.redemptionValue > 0n ? cs.redemptionValue : D18;
@@ -698,14 +724,15 @@
       const [plsBal, sunBal, info] = await Promise.all([
         provider.getBalance(account),
         token.balanceOf(account),
-        vault.vaultInfo(account)
+        vault.getVault(account)
       ]);
       document.getElementById("balPLS").textContent    = fmtBig(Number(ethers.formatEther(plsBal))) + " PLS";
       document.getElementById("balSUNPLS").textContent = fmtBig(Number(ethers.formatEther(sunBal))) + " SunPLS";
-      const r = Number(info.ratio);
+      const crBps = info.crBps;
+      const ratio = (info.debt === 0n || crBps === 0n) ? Infinity : Number(crBps) / 100;
       const el = document.getElementById("balCR");
-      el.textContent = r > 1e9 ? "No Debt" : r.toFixed(1) + "%";
-      el.style.color = r < 130 ? "var(--risk)" : r < 150 ? "var(--warn)" : "var(--safe)";
+      el.textContent = ratio === Infinity ? "No Debt" : ratio.toFixed(1) + "%";
+      el.style.color = ratio === Infinity ? "var(--safe)" : ratio < 130 ? "var(--risk)" : ratio < 150 ? "var(--warn)" : "var(--safe)";
     } catch {}
   }
 
@@ -737,7 +764,7 @@
     btn.disabled = true; btn.textContent = "Scanning...";
 
     let total;
-    try { total = Number(await vaultC.getVaultCount()); } catch { btn.disabled = false; btn.textContent = "Scan All Vaults"; return; }
+    try { total = Number(await vaultC.vaultCount()); } catch { btn.disabled = false; btn.textContent = "Scan All Vaults"; return; }
 
     const results = [];
     const BATCH   = 8;
@@ -746,17 +773,23 @@
     for (let i = 0; i < total; i += BATCH) {
       const batch = [];
       for (let j = i; j < Math.min(i + BATCH, total); j++) {
-        batch.push(vaultC.getVaultOwner(j).then(owner =>
-          vaultC.vaultInfo(owner).then(info => ({
-            owner,
-            collateral: info.collateral,
-            debt:       info.debt,
-            collValSunPLS: info.collateralValueInSunPLS,
-            ratio:      Number(info.ratio),
-            mintable:   info.mintable,
-            liquidatable: info.liquidatable,
-            redeemable:   info.redeemable
-          }))
+        batch.push(vaultC.vaultOwners(j).then(owner =>
+          vaultC.getVault(owner).then(info => {
+            const crBps = info.crBps;
+            const ratio = (info.debt === 0n || crBps === 0n) ? Infinity : Number(crBps) / 100;
+            const collVal = currentPrice > 0n ? (info.collateral * currentPrice) / D18 : 0n;
+            const maxDebt = collVal > 0n ? (collVal * 10000n) / 15000n : 0n;
+            const mintable = maxDebt > info.debt ? maxDebt - info.debt : 0n;
+            return {
+              owner,
+              collateral: info.collateral,
+              debt:       info.debt,
+              ratio,
+              mintable,
+              liquidatable: info.liquidatable,
+              redeemable:   info.redeemable
+            };
+          })
         ).catch(() => null));
       }
       const resolved = (await Promise.all(batch)).filter(Boolean);
@@ -768,11 +801,6 @@
 
     if (type === "liq") {
       scanData.liq = results.filter(v => v.liquidatable);
-      const pending = [];
-      for (const v of scanData.liq) {
-        try { const li = await vaultC.liquidationInfo(v.owner); v.debt = li.debt; v.minRepay = li.minRepay; v.reward = li.reward; v.bonusBps = li.bonusBps; } catch {}
-        pending.push(v);
-      }
       document.getElementById("liqCount").textContent = scanData.liq.length + " found";
       document.getElementById("statLiq").textContent  = scanData.liq.length.toString();
       renderLiqTable(scanData.liq);
@@ -804,16 +832,14 @@
 
   function renderLiqTable(rows) {
     const tbody = document.getElementById("liqTable");
-    if (!rows.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No liquidatable vaults found</td></tr>'; return; }
+    if (!rows.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No liquidatable vaults found</td></tr>'; return; }
     const sorted = sortBy(rows, sortState.liq.key, sortState.liq.asc);
     tbody.innerHTML = sorted.map(v => `
       <tr>
         <td class="addr"><a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
-        <td>${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
-        <td>${v.debt ? fmtBig(Number(ethers.formatEther(v.debt))) : fmtBig(Number(ethers.formatEther(v.debt)))}</td>
-        <td>${v.minRepay ? fmtBig(Number(ethers.formatEther(v.minRepay))) + " SunPLS" : "—"}</td>
-        <td style="color:var(--safe)">${v.reward ? fmtBig(Number(ethers.formatEther(v.reward))) + " PLS" : "—"}</td>
-        <td style="color:var(--sun2)">${v.bonusBps ? (Number(v.bonusBps)/100).toFixed(1) + "%" : "—"}</td>
+        <td style="color:var(--risk);font-weight:700">${v.ratio === Infinity ? "∞" : v.ratio.toFixed(1)}%</td>
+        <td>${fmtBig(Number(ethers.formatEther(v.collateral)))} PLS</td>
+        <td>${fmtBig(Number(ethers.formatEther(v.debt)))} SunPLS</td>
         <td>
           <span class="act-btn liq" onclick="openLiqModal('${v.owner}')">Liquidate</span>
         </td>
@@ -828,7 +854,7 @@
     tbody.innerHTML = sorted.map(v => `
       <tr>
         <td class="addr"><a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
-        <td style="color:${v.ratio < 110 ? 'var(--risk)' : v.ratio < 130 ? 'var(--risk)' : 'var(--warn)'}">${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
+        <td style="color:${v.ratio < 110 ? 'var(--risk)' : v.ratio < 130 ? 'var(--risk)' : 'var(--warn)'}">${v.ratio === Infinity ? "∞" : v.ratio.toFixed(1)}%</td>
         <td>${fmtBig(Number(ethers.formatEther(v.collateral)))} PLS</td>
         <td>${fmtBig(Number(ethers.formatEther(v.debt)))} SunPLS</td>
         <td><span style="color:var(--muted);font-size:0.82em">Enter amount below</span></td>
@@ -874,7 +900,7 @@
       return `
         <tr>
           <td class="addr">#${i+1} <a href="${scanUrl(v.owner)}" target="_blank">${shortAddr(v.owner)}</a></td>
-          <td style="color:${v.ratio < 110 ? 'var(--risk)' : v.ratio < 150 ? 'var(--warn)' : 'var(--safe)'};font-weight:700">${v.ratio > 1e9 ? "∞" : v.ratio.toFixed(1)}%</td>
+          <td style="color:${v.ratio === Infinity ? 'var(--safe)' : v.ratio < 110 ? 'var(--risk)' : v.ratio < 150 ? 'var(--warn)' : 'var(--safe)'};font-weight:700">${v.ratio === Infinity ? "∞" : v.ratio.toFixed(1)}%</td>
           <td>${fmtBig(Number(ethers.formatEther(v.collateral)))} PLS</td>
           <td>${fmtBig(Number(ethers.formatEther(v.debt)))} SunPLS</td>
           <td style="color:var(--safe)">${fmtBig(Number(ethers.formatEther(v.mintable)))}</td>
@@ -909,42 +935,35 @@
     if (!vaultC) { result.innerHTML = '<div style="color:var(--muted);text-align:center;margin-top:10px">Wait for connection...</div>'; return; }
 
     try {
-      const info = await vaultC.vaultInfo(addr);
-      const [p] = await oracleC.peek();
+      const [info, [p]] = await Promise.all([vaultC.getVault(addr), oracleC.peek()]);
       currentPrice = p;
 
-      const ratio  = Number(info.ratio);
-      const rateAPR = Number(info.rate) / 1e16;
-      const rClass = ratio < 110 ? "risk" : ratio < 150 ? "warn" : "safe";
+      const crBps = info.crBps;
+      const ratio = (info.debt === 0n || crBps === 0n) ? Infinity : Number(crBps) / 100;
+      const rClass = ratio === Infinity ? "safe" : ratio < 110 ? "risk" : ratio < 150 ? "warn" : "safe";
+      const collVal = p > 0n ? (info.collateral * p) / D18 : 0n;
+      const maxDebt = collVal > 0n ? (collVal * 10000n) / 15000n : 0n;
+      const mintable = maxDebt > info.debt ? maxDebt - info.debt : 0n;
 
       let liqHtml = "";
       if (info.liquidatable) {
-        try {
-          const li = await vaultC.liquidationInfo(addr);
-          liqHtml = `
-            <div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">
-              <div style="color:var(--risk);font-weight:700;margin-bottom:8px">LIQUIDATABLE</div>
-              <div class="info-row"><span class="info-label">Min Repay</span><span class="info-val risk">${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS</span></div>
-              <div class="info-row"><span class="info-label">Reward</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(li.reward)))} PLS</span></div>
-              <div class="info-row"><span class="info-label">Bonus</span><span class="info-val gold">${(Number(li.bonusBps)/100).toFixed(1)}%</span></div>
-              <button class="btn btn-red" onclick="openLiqModal('${addr}')" style="margin-top:8px">Liquidate This Vault</button>
-            </div>`;
-        } catch {}
+        liqHtml = `
+          <div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">
+            <div style="color:var(--risk);font-weight:700;margin-bottom:8px">LIQUIDATABLE</div>
+            <div style="font-size:0.82em;color:rgba(254,243,199,0.7);margin-bottom:10px">Pool can absorb instantly, or use auction liquidation to receive PLS collateral.</div>
+            <button class="btn btn-red" onclick="openLiqModal('${addr}')" style="margin-top:4px">Liquidate This Vault</button>
+          </div>`;
       }
 
       let redHtml = "";
       if (info.redeemable) {
-        try {
-          const testAmt = info.debt > D18 ? D18 : info.debt;
-          const prev = await vaultC.redemptionPreview(addr, testAmt);
-          redHtml = `
-            <div style="margin-top:10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:10px;padding:12px">
-              <div style="color:var(--cyan2);font-weight:700;margin-bottom:8px">REDEEMABLE (CR &lt; 150%)</div>
-              <div class="info-row"><span class="info-label">R (preview)</span><span class="info-val cyan">${fmtBig(Number(ethers.formatEther(prev.R)))} WPLS</span></div>
-              <div class="info-row"><span class="info-label">PLS per 1 SunPLS</span><span class="info-val cyan">${fmtBig(Number(ethers.formatEther(prev.plsToRedeemer)))} PLS</span></div>
-              <button class="btn btn-cyan" onclick="openRedeemModal('${addr}')" style="margin-top:8px">Redeem Against This Vault</button>
-            </div>`;
-        } catch {}
+        const estPls = currentR > 0n ? Number(ethers.formatEther(currentR)) : 0;
+        redHtml = `
+          <div style="margin-top:10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:10px;padding:12px">
+            <div style="color:var(--cyan2);font-weight:700;margin-bottom:8px">REDEEMABLE (CR &lt; 150%)</div>
+            <div class="info-row"><span class="info-label">Est. PLS per SunPLS</span><span class="info-val cyan">≈ ${fmtBig(estPls)} PLS (at R)</span></div>
+            <button class="btn btn-cyan" onclick="openRedeemModal('${addr}')" style="margin-top:8px">Redeem Against This Vault</button>
+          </div>`;
       }
 
       result.innerHTML = `
@@ -952,11 +971,9 @@
           <div class="info-row"><span class="info-label">Address</span><a href="${scanUrl(addr)}" target="_blank" class="info-val gold" style="font-family:monospace;font-size:0.9em">${shortAddr(addr)}</a></div>
           <div class="info-row"><span class="info-label">Collateral</span><span class="info-val gold">${fmtBig(Number(ethers.formatEther(info.collateral)))} PLS</span></div>
           <div class="info-row"><span class="info-label">Debt</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS</span></div>
-          <div class="info-row"><span class="info-label">Coll Value</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.collateralValueInSunPLS)))} SunPLS</span></div>
-          <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val ${rClass}">${ratio > 1e9 ? "No Debt" : ratio.toFixed(1) + "%"}</span></div>
-          <div class="info-row"><span class="info-label">Stability Rate</span><span class="info-val ${rateAPR > 0 ? 'risk' : 'safe'}">${(rateAPR >= 0 ? "+" : "") + rateAPR.toFixed(4)}% APR</span></div>
-          <div class="info-row"><span class="info-label">Mintable</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(info.mintable)))} SunPLS</span></div>
-          <div class="info-row"><span class="info-label">Oracle Healthy</span><span class="info-val ${info.oracleHealthy ? 'safe' : 'risk'}">${info.oracleHealthy ? "Yes" : "No"}</span></div>
+          <div class="info-row"><span class="info-label">Coll Value</span><span class="info-val">${fmtBig(Number(ethers.formatEther(collVal)))} SunPLS</span></div>
+          <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val ${rClass}">${ratio === Infinity ? "No Debt" : ratio.toFixed(1) + "%"}</span></div>
+          <div class="info-row"><span class="info-label">Mintable</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(mintable)))} SunPLS</span></div>
           ${liqHtml}${redHtml}
         </div>`;
     } catch (e) { result.innerHTML = `<div style="color:var(--risk);text-align:center;margin-top:10px">${e.message}</div>`; }
@@ -974,23 +991,19 @@
     document.getElementById("liqPreview").textContent = "";
 
     try {
-      const [info, li, sunBal] = await Promise.all([
-        vault.vaultInfo(addr), vault.liquidationInfo(addr), token.balanceOf(account)
-      ]);
-      liqInfo = { info, li, sunBal };
+      const [info, sunBal] = await Promise.all([vault.getVault(addr), token.balanceOf(account)]);
+      liqInfo = { info, sunBal };
 
       document.getElementById("liqModalInfo").innerHTML = `
         <div class="info-row"><span class="info-label">Vault</span><a href="${scanUrl(addr)}" target="_blank" class="info-val gold">${shortAddr(addr)}</a></div>
-        <div class="info-row"><span class="info-label">Collateral Ratio</span><span class="info-val risk">${Number(info.ratio).toFixed(1)}%</span></div>
-        <div class="info-row"><span class="info-label">Total Debt</span><span class="info-val risk">${fmtBig(Number(ethers.formatEther(li.debt)))} SunPLS</span></div>
-        <div class="info-row"><span class="info-label">Min Repay (5%)</span><span class="info-val">${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS</span></div>
-        <div class="info-row"><span class="info-label">Max Reward</span><span class="info-val safe">${fmtBig(Number(ethers.formatEther(li.reward)))} PLS</span></div>
-        <div class="info-row"><span class="info-label">Bonus BPS</span><span class="info-val gold">${(Number(li.bonusBps)/100).toFixed(1)}%</span></div>
-        <div class="info-row"><span class="info-label">My SunPLS</span><span class="info-val ${sunBal >= li.minRepay ? 'safe' : 'risk'}">${fmtBig(Number(ethers.formatEther(sunBal)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Collateral Ratio</span><span class="info-val risk">${info.crBps === 0n ? "No Debt" : (Number(info.crBps)/100).toFixed(1) + "%"}</span></div>
+        <div class="info-row"><span class="info-label">Total Debt</span><span class="info-val risk">${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS</span></div>
+        <div class="info-row"><span class="info-label">Collateral</span><span class="info-val gold">${fmtBig(Number(ethers.formatEther(info.collateral)))} PLS</span></div>
+        <div class="info-row"><span class="info-label">My SunPLS</span><span class="info-val ${sunBal > 0n ? 'safe' : 'warn'}">${fmtBig(Number(ethers.formatEther(sunBal)))} SunPLS</span></div>
       `;
 
-      document.getElementById("liqRepayInput").placeholder = `Min: ${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS`;
-      document.getElementById("liqHelper").textContent = `Bonus scales from ${(Number(li.bonusBps)/100).toFixed(1)}% at min repay up to maximum as you repay more`;
+      document.getElementById("liqRepayInput").placeholder = `Max: ${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS`;
+      document.getElementById("liqHelper").textContent = "Dutch auction: the longer the vault sits under 110%, the better the PLS/SunPLS exchange rate";
     } catch (e) { document.getElementById("liqModalInfo").innerHTML = `<div style="color:var(--risk)">${e.message}</div>`; }
   }
 
@@ -1000,19 +1013,12 @@
     const prev = document.getElementById("liqPreview");
     if (!v) { prev.textContent = ""; return; }
     const repWei = ethers.parseUnits(v.toString(), 18);
-    const { li } = liqInfo;
-    if (repWei < li.minRepay) {
-      prev.textContent = `Min: ${fmtBig(Number(ethers.formatEther(li.minRepay)))} SunPLS`;
+    const { info } = liqInfo;
+    if (repWei > info.debt) {
+      prev.textContent = `Exceeds debt — max ${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS`;
       prev.className = "preview risk"; return;
     }
-    const maxRep = li.debt > li.reward ? li.debt : li.reward;
-    if (repWei > li.debt) {
-      prev.textContent = `Exceeds debt — max ${fmtBig(Number(ethers.formatEther(li.debt)))} SunPLS`;
-      prev.className = "preview risk"; return;
-    }
-    // Proportional reward
-    const myReward = (li.reward * repWei) / li.debt;
-    prev.textContent = `You repay ${v.toFixed(4)} SunPLS → receive ≈ ${fmtBig(Number(ethers.formatEther(myReward)))} PLS`;
+    prev.textContent = `You provide ${v.toFixed(4)} SunPLS → receive PLS collateral (Dutch auction price)`;
     prev.className = "preview safe";
   }
 
@@ -1032,13 +1038,30 @@
         stEl.textContent = "Approving SunPLS...";
         await (await token.approve(VAULT_ADDR, repWei)).wait();
       }
-      stEl.textContent = "Liquidating...";
-      await (await vault.liquidate(liqTarget, repWei)).wait();
-      stEl.textContent = "Liquidation successful!";
+      stEl.textContent = "Auction liquidating...";
+      await (await vault.auctionLiquidate(liqTarget, repWei)).wait();
+      stEl.textContent = "Auction liquidation successful!";
       await loadMyBalances();
       setTimeout(() => closeModal("liqModal"), 3000);
     } catch (e) { erEl.textContent = e.reason || e.message || "Failed"; }
-    finally { btn.disabled = false; btn.textContent = "Confirm Liquidation"; }
+    finally { btn.disabled = false; btn.textContent = "Auction Liquidate"; }
+  }
+
+  async function doPoolLiquidate() {
+    if (!liqTarget) return;
+    const btn = document.getElementById("poolLiqBtn");
+    const stEl = document.getElementById("liqStatus");
+    const erEl = document.getElementById("liqError");
+    btn.disabled = true; btn.textContent = "Processing...";
+    stEl.textContent = ""; erEl.textContent = "";
+    try {
+      stEl.textContent = "Pool liquidating...";
+      await (await vault.poolLiquidate(liqTarget)).wait();
+      stEl.textContent = "Pool liquidation successful!";
+      await loadMyBalances();
+      setTimeout(() => closeModal("liqModal"), 3000);
+    } catch (e) { erEl.textContent = e.reason || e.message || "Pool may not have enough SunPLS deposited — try auction liquidation"; }
+    finally { btn.disabled = false; btn.textContent = "Pool Liquidate"; }
   }
 
   // ── REDEMPTION MODAL ───────────────────────────────────────────────────────
@@ -1053,10 +1076,10 @@
     document.getElementById("redeemPreview").textContent = "";
 
     try {
-      const [info, sunBal] = await Promise.all([vault.vaultInfo(addr), token.balanceOf(account)]);
+      const [info, sunBal] = await Promise.all([vault.getVault(addr), token.balanceOf(account)]);
       document.getElementById("redeemModalInfo").innerHTML = `
         <div class="info-row"><span class="info-label">Vault</span><a href="${scanUrl(addr)}" target="_blank" class="info-val cyan">${shortAddr(addr)}</a></div>
-        <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val warn">${Number(info.ratio).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="info-label">CR Ratio</span><span class="info-val warn">${(Number(info.crBps)/100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="info-label">Vault Debt</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.debt)))} SunPLS</span></div>
         <div class="info-row"><span class="info-label">Collateral</span><span class="info-val">${fmtBig(Number(ethers.formatEther(info.collateral)))} PLS</span></div>
         <div class="info-row"><span class="info-label">My SunPLS</span><span class="info-val gold">${fmtBig(Number(ethers.formatEther(sunBal)))} SunPLS</span></div>
@@ -1073,12 +1096,11 @@
     if (!v) { prev.textContent = ""; return; }
     try {
       const amt = ethers.parseUnits(v.toString(), 18);
-      const p = await vault.redemptionPreview(redeemTarget, amt);
-      if (!p.eligible) { prev.textContent = "Not eligible for redemption"; prev.className = "preview risk"; return; }
-      const plsOut = Number(ethers.formatEther(p.plsToRedeemer));
-      const fee    = Number(ethers.formatEther(p.feeToOwner));
-      const R      = Number(ethers.formatEther(p.R));
-      prev.textContent = `Receive ≈ ${fmtBig(plsOut)} PLS · Fee: ${fmtBig(fee)} PLS · R=${fmtBig(R)} WPLS`;
+      if (currentR === 0n) { prev.textContent = "R not loaded"; prev.className = "preview risk"; return; }
+      const plsOut = (amt * currentR) / D18;
+      const fee    = plsOut * 5n / 1000n;
+      const net    = plsOut - fee;
+      prev.textContent = `Burn ${v.toFixed(4)} SunPLS → receive ≈ ${fmtBig(Number(ethers.formatEther(net)))} PLS (R=${fmtBig(Number(ethers.formatEther(currentR)))} WPLS, 0.5% fee)`;
       prev.className = "preview safe";
     } catch { prev.textContent = "Preview failed"; prev.className = "preview risk"; }
   }
