@@ -517,12 +517,12 @@ All contracts on **PulseChain (Chain ID: 369)**. No owner keys. No upgradeabilit
 
 | Contract | Address |
 |----------|---------|
-| **SunPLS Token** | `0xe4b8EC561f03713207f9669981A0F5D793b0d687` |
-| **SunPLS Vault** | `0xAc2309E21F4acA2eC5fB14ae02a78AA0db7691ae` |
-| **Oracle** | `0xBac6B5ee10d1de3f3A522948326438A4d059eFB7` |
-| **Controller** | `0x4360e04780a8D7d930b620275546Df5193A7b6C4` |
-| **Stability Pool** | `0xa820130b9CcDef6DF3f49856F2Fa6CEce5cdd80D` |
-| **PulseX SunPLS/WPLS Pair** | `0xa2eE0374606c26638dA36E5fC078146bEA3b2728` |
+| **SunPLS Token** | `0xfbfe269C256A62425feD4b57Aabf44b3536f4AD4` |
+| **SunPLS Vault** | `0x7414121FBe16e18c03991F2980461f071a88Ce8f` |
+| **Oracle** | `0x228436E79B91103d1F3fff8a80F33485186DEfdB` |
+| **Controller** | `0x45dbaa6E65075391002c05f4EaDB3D6e8605218A` |
+| **Stability Pool** | `0x1f55942646BB2edBC1B7ACE9EeD0D71560A6AF3D` |
+| **PulseX SunPLS/WPLS Pair** | `0x44C152d91df1C2aD5a2F964cb982963a98e5885D` |
 | **WPLS** | `0xA1077a294dDE1B09bB078844df40758a5D0f9a27` |
 
 **Deployment details:**
