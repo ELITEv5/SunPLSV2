@@ -517,12 +517,12 @@ All contracts on **PulseChain (Chain ID: 369)**. No owner keys. No upgradeabilit
 
 | Contract | Address |
 |----------|---------|
-| **SunPLS Token** | `0xfbfe269C256A62425feD4b57Aabf44b3536f4AD4` |
-| **SunPLS Vault** | `0x7414121FBe16e18c03991F2980461f071a88Ce8f` |
-| **Oracle** | `0x228436E79B91103d1F3fff8a80F33485186DEfdB` |
-| **Controller** | `0x45dbaa6E65075391002c05f4EaDB3D6e8605218A` |
-| **Stability Pool** | `0x1f55942646BB2edBC1B7ACE9EeD0D71560A6AF3D` |
-| **PulseX SunPLS/WPLS Pair** | `0x44C152d91df1C2aD5a2F964cb982963a98e5885D` |
+| **SunPLS Token** | `0x5d29509551378B55E0e79e3e9a7f610aC1f281D5` |
+| **SunPLS Vault** | `0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e` |
+| **Oracle** | `0xC74b5d405276FF87Ad798acCF104c6E727cfe66b` |
+| **Controller** | `0x6828BD8c3eF04aA927374a45b4796A3cb6C54945` |
+| **Stability Pool** | `0xeec42299EC0564A1804e8D7De87bE9463bf151B2` |
+| **PulseX SunPLS/WPLS Pair** | `0x4803EB64649d6647900149D6e60E3b45B13561E1` |
 | **WPLS** | `0xA1077a294dDE1B09bB078844df40758a5D0f9a27` |
 
 **Deployment details:**
@@ -537,7 +537,7 @@ All contracts on **PulseChain (Chain ID: 369)**. No owner keys. No upgradeabilit
 - Redemption threshold: **< 150% CR**
 - Stability rate: **0%–30% APR** (never negative)
 - No withdrawal cooldown
-- Debt ceiling: 100,000 SunPLS at launch (increases as TVL grows)
+- Debt ceiling: 100B SunPLS (first 30 days) → unlimited (150% CR is the real limit)
 
 **Starting R:** 1.227 WPLS — matched the live PulseX pair price at deploy time, so P ≈ R at launch with near-zero controller spread.
 
@@ -567,7 +567,7 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contr
 3. Deploy SunPLS_Oracle_RAI.sol         — bootstraps lastPrice from live reserves
 4. Deploy SunPLS_Controller_RAI.sol     — initialR = oracle.peek() at deploy time
 5. Deploy SunPLS_StabilityPool_RAI.sol
-6. Deploy SunPLS_Vault_RAI.sol          — pass debtCeiling (start conservative: 100_000e18)
+6. Deploy SunPLS_Vault_RAI.sol          — no debtCeiling param; ceiling is time-based (100B → unlimited)
 7. token.setVault(vault)                — one-time latch, immutable
 8. token.setPool(pool)                  — one-time latch (pool burn permission)
 9. controller.setVault(vault)           — one-time latch, immutable
