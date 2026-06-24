@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SunPLS · Native Index Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --card: #13131a;
+      --border: #252535;
+      --text: #e2e2e8;
+      --muted: #5a5a72;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --blue: #60a5fa;
+      --accent: #a78bfa;
+      --purple: #c084fc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Courier New', monospace; font-size: 14px;
+      padding: 28px 24px; max-width: 1100px; margin: 0 auto;
+    }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--accent); }
+
+    h1 { font-size: 17px; color: var(--accent); margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 11px; margin-bottom: 8px; line-height: 1.7; }
+    .sub span { color: var(--text); }
+
+    .section-label {
+      font-size: 10px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .1em; margin: 20px 0 8px;
+    }
+
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .card.accent-border { border-color: rgba(167,139,250,.3); }
+    .card.blue-border   { border-color: rgba(96,165,250,.3); }
+
+    .clabel { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+    .big { font-size: 28px; font-weight: bold; }
+    .big.up   { color: var(--green); }
+    .big.down { color: var(--red); }
+    .big.neutral { color: var(--text); }
+    .cmeta { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; }
+    .tag.ok  { background: rgba(34,197,94,.1);  color: var(--green);  border: 1px solid rgba(34,197,94,.25); }
+    .tag.bad { background: rgba(239,68,68,.1);  color: var(--red);    border: 1px solid rgba(239,68,68,.25); }
+    .tag.warn{ background: rgba(245,158,11,.1); color: var(--yellow); border: 1px solid rgba(245,158,11,.25); }
+    .tag.info{ background: rgba(96,165,250,.1); color: var(--blue);   border: 1px solid rgba(96,165,250,.25); }
+    .tag.p   { background: rgba(167,139,250,.1);color: var(--accent); border: 1px solid rgba(167,139,250,.25); }
+
+    .kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(37,37,53,.7); font-size: 13px; }
+    .kv:last-child { border-bottom: none; }
+    .kv .k { color: var(--muted); }
+    .kv .v { font-weight: bold; text-align: right; }
+
+    .theory-highlight {
+      background: rgba(167,139,250,.07); border: 1px solid rgba(167,139,250,.2);
+      border-radius: 8px; padding: 16px; margin-bottom: 12px;
+    }
+    .theory-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; font-size: 13px; }
+    .theory-row .tk { color: var(--muted); }
+    .theory-row .tv { font-weight: bold; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 10px; color: var(--muted); text-transform: uppercase;
+         letter-spacing: .06em; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    td { padding: 9px 10px; border-bottom: 1px solid rgba(37,37,53,.5); font-size: 12px; }
+    tr:last-child td { border-bottom: none; }
+    .up { color: var(--green); } .down { color: var(--red); } .dim { color: var(--muted); }
+
+    .actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; flex-wrap: wrap; }
+    button {
+      padding: 9px 18px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); cursor: pointer;
+      font-family: inherit; font-size: 13px; transition: border-color .15s, color .15s;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    button.primary { background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.35); color: var(--accent); }
+    button.primary:hover:not(:disabled) { background: rgba(167,139,250,.2); }
+    #msg { font-size: 12px; color: var(--muted); }
+
+    .footer { font-size: 11px; color: var(--muted); margin-top: 12px; }
+
+    .explainer {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 28px 24px;
+      margin-bottom: 28px;
+      background: linear-gradient(135deg, rgba(167,139,250,.04) 0%, rgba(96,165,250,.04) 100%);
+    }
+    .explainer h2 {
+      font-size: 20px; color: var(--accent); margin-bottom: 6px; letter-spacing: .02em;
+    }
+    .explainer .tagline {
+      font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6;
+    }
+    .explainer-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 22px;
+    }
+    .explainer-col h3 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--accent); margin-bottom: 10px;
+    }
+    .explainer-col p {
+      font-size: 12px; color: var(--muted); line-height: 1.75;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .explainer-col p b { color: var(--text); font-family: 'Courier New', monospace; }
+    .basket-pills {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+    }
+    .basket-pills span {
+      font-size: 11px; padding: 3px 10px; border-radius: 12px;
+      background: rgba(167,139,250,.1); color: var(--accent);
+      border: 1px solid rgba(167,139,250,.2);
+    }
+    .explainer-verdict {
+      border-top: 1px solid var(--border); padding-top: 18px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .verdict-item { font-size: 12px; display: flex; gap: 10px; align-items: flex-start; }
+    .verdict-item .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .verdict-item p { color: var(--muted); line-height: 1.65; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .verdict-item p b { color: var(--text); }
+    .contracts-row {
+      font-size: 11px; color: var(--muted); margin-top: 20px;
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    }
+    .contracts-row span { color: var(--text); }
+    .contracts-row a:hover { color: var(--accent); }
+
+    @media (max-width: 700px) {
+      .grid4 { grid-template-columns: 1fr 1fr; }
+      .grid3, .grid2 { grid-template-columns: 1fr; }
+      .explainer-grid { grid-template-columns: 1fr; }
+      .explainer-verdict { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>SunPLS · Native Index Monitor</h1>
+
+<!-- ── Explainer ── -->
+<div class="explainer">
+  <h2>Can SunPLS become PulseChain's native monetary unit?</h2>
+  <p class="tagline">
+    This page is a live theoretical test — running a new purchasing power oracle alongside the deployed SunPLS protocol
+    to see if they could work together. No code has changed. Nothing is wired together yet.
+    We are just watching.
+  </p>
+
+  <div class="explainer-grid">
+    <div class="explainer-col">
+      <h3>What is SunPLS</h3>
+      <p>
+        SunPLS is a <b>WPLS-backed CDP protocol</b> on PulseChain. Lock WPLS as collateral,
+        mint SunPLS. A stability fee and redemption mechanism keeps the market price
+        close to the redemption price <b>R</b> — a target the market is expected to chase,
+        not the other way around. The protocol is live, immutable, and fully on-chain.
+      </p>
+    </div>
+    <div class="explainer-col">
+      <h3>What is the Native Index</h3>
+      <p>
+        A new on-chain oracle tracking a basket of PulseChain-native assets denominated in
+        WPLS. It starts at <b>1.0×</b> and moves at most <b>1% per update</b> — slow and
+        deliberate, resistant to manipulation. The basket reflects genuine PulseChain
+        economic activity: token prices, usage, and gas demand.
+      </p>
+      <div class="basket-pills">
+        <span>50% WPLS</span><span>20% PLSX</span><span>10% INC</span><span>10% HEX</span><span>10% Gas</span>
+      </div>
+    </div>
+    <div class="explainer-col">
+      <h3>The Hypothesis</h3>
+      <p>
+        What if <b>R tracked the index</b>? As PulseChain grows — more usage, stronger native
+        tokens, rising gas demand — the index rises, and R rises with it. SunPLS holders
+        would not hold a static peg. They would hold a claim on <b>PulseChain's own
+        purchasing power</b>, appreciating slowly as the ecosystem expands.
+      </p>
+    </div>
+  </div>
+
+  <div class="explainer-verdict">
+    <div class="verdict-item">
+      <div class="icon">&#9651;</div>
+      <p><b>What we're watching.</b> The <b>Theoretical Native Target</b> below shows what R would be
+      today if it had always tracked the index. The <b>P / Native R</b> ratio shows whether SunPLS
+      would be above or below par under this regime — and whether that looks healthy or not.</p>
+    </div>
+    <div class="verdict-item">
+      <div class="icon">&#9651;</div>
+      <p><b>What success looks like.</b> Over weeks and months: the index moves smoothly and in
+      economically meaningful ways. The P / Native R ratio stays close to 100%. Borrowers and
+      holders are not destabilised. If that holds, <b>Controller v2</b> wires it in — and SunPLS
+      becomes the first CDP asset pegged to a chain rather than a fiat currency.</p>
+    </div>
+    <div class="verdict-item">
+      <div class="icon">&#9651;</div>
+      <p><b>No USD. No TradFi oracle.</b> Every price in this system comes from PulseX V1 on-chain
+      liquidity. There is no Chainlink feed, no external data source, no dependency on anything
+      outside PulseChain. The index is endogenous — the chain prices itself.</p>
+    </div>
+    <div class="verdict-item">
+      <div class="icon">&#9651;</div>
+      <p><b>Still a CDP. Still safe.</b> The stability fee, liquidation mechanics, stability pool,
+      and collateral ratios do not change. SunPLS remains fully collateralised and redeemable
+      at R at all times. The only change is that R itself has a direction — it can drift
+      upward with the chain, not just sit still.</p>
+    </div>
+  </div>
+
+  <div class="contracts-row">
+    <span>Contracts —</span>
+    <span>Index Oracle:</span> <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9...049A</a>
+    <span>Price Oracle:</span> <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b...e66b</a>
+    <span>Controller:</span>  <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828...945</a>
+    <span>Vault:</span>       <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd...29e</a>
+  </div>
+</div>
+
+<!-- ── Top metrics ── -->
+<div class="section-label">Native Index Oracle &nbsp;·&nbsp; 50% WPLS | 20% PLSX | 10% INC | 10% HEX | 10% gas</div>
+<div class="grid4" style="margin-bottom:12px">
+  <div class="card accent-border">
+    <div class="clabel">Accepted Index</div>
+    <div class="big" id="val-accepted">—</div>
+    <div class="cmeta" id="meta-accepted"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Live Spot Index</div>
+    <div class="big" id="val-spot">—</div>
+    <div class="cmeta" id="meta-spot"></div>
+  </div>
+  <div class="card blue-border">
+    <div class="clabel">R — Redemption Price</div>
+    <div class="big neutral" id="val-R">—</div>
+    <div class="cmeta" id="meta-R"></div>
+  </div>
+  <div class="card blue-border">
+    <div class="clabel">P — SunPLS Market Price</div>
+    <div class="big" id="val-P">—</div>
+    <div class="cmeta" id="meta-P"></div>
+  </div>
+</div>
+
+<!-- ── Analysis row ── -->
+<div class="grid2" style="margin-bottom:12px">
+
+  <!-- P/R status -->
+  <div class="card blue-border">
+    <div class="clabel" style="margin-bottom:10px">Protocol State</div>
+    <div id="pr-section"></div>
+  </div>
+
+  <!-- Theoretical -->
+  <div class="card accent-border">
+    <div class="clabel" style="margin-bottom:10px">Theoretical: If R Tracked the Index</div>
+    <div id="theory-section"></div>
+  </div>
+
+</div>
+
+<!-- ── Basket + Vault row ── -->
+<div class="grid2" style="margin-bottom:12px">
+
+  <div class="card">
+    <div class="clabel" style="margin-bottom:10px">Basket Breakdown <span class="dim" style="text-transform:none;font-size:10px">(prices at last update)</span></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Asset</th><th>Wt</th><th>Init</th><th>Last</th><th>Δ</th><th>Contrib</th>
+        </tr>
+      </thead>
+      <tbody id="basket-body"><tr><td colspan="6" class="dim">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="clabel" style="margin-bottom:10px">Protocol Stats</div>
+    <div id="protocol-stats"></div>
+  </div>
+
+</div>
+
+<!-- ── Actions ── -->
+<div class="actions">
+  <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
+  <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Index</button>
+  <span id="msg"></span>
+</div>
+
+<!-- ── History ── -->
+<div class="section-label" style="margin-top:20px">Index Update History</div>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Accepted</th><th>Raw</th><th>Δ Accepted</th><th>Capped</th><th>R at time</th><th>P at time</th></tr>
+    </thead>
+    <tbody id="hist-body">
+      <tr><td colspan="7" class="dim">No history yet — call update() to record entries.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer" id="footer">Refreshing…</div>
+
+<script>
+// ── Addresses ─────────────────────────────────────────────────────────────────
+const ADDR = {
+  index:      '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
+  oracle:     '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
+  controller: '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
+  vault:      '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
+};
+const RPC      = 'https://rpc.pulsechain.com';
+const HIST_KEY = 'sunpls_idx_hist_v2';
+
+// ── ABIs ──────────────────────────────────────────────────────────────────────
+const INDEX_ABI = [
+  'function peek() view returns (uint256 index, uint256 timestamp)',
+  'function lastRawIndex() view returns (uint256)',
+  'function currentRawIndex() view returns (uint256)',
+  'function isHealthy() view returns (bool)',
+  'function componentCount() view returns (uint256)',
+  'function component(uint256) view returns (bytes32 symbol, address pair, address asset, uint16 weightBps, uint256 initialPrice, uint256 lastPrice, uint256 lastPriceTimestamp)',
+  'function wplsWeightBps() view returns (uint16)',
+  'function gasWeightBps() view returns (uint16)',
+  'function lastGasPrice() view returns (uint256)',
+  'function initialGasPrice() view returns (uint256)',
+  'function update() returns (uint256 rawIndex, uint256 acceptedIndex)',
+];
+const ORACLE_ABI = [
+  'function peek() view returns (uint256 price, uint256 timestamp)',
+  'function isHealthy() view returns (bool)',
+  'function getCreepingState() view returns (uint256 pending, uint8 confs, bool isCreeping)',
+];
+const CTRL_ABI = [
+  'function R() view returns (uint256)',
+  'function r() view returns (int256)',
+  'function lastEpochTime() view returns (uint256)',
+  'function epochCount() view returns (uint256)',
+  'function EPOCH_DURATION() view returns (uint256)',
+  'function lastKnownP() view returns (uint256)',
+  'function limiterHits() view returns (uint256)',
+  'function frozenEpochs() view returns (uint256)',
+  'function emergencyEpochs() view returns (uint256)',
+  'function deadbandSkips() view returns (uint256)',
+];
+const VAULT_ABI = [
+  'function totalDebt() view returns (uint256)',
+  'function totalCollateral() view returns (uint256)',
+  'function surplusBuffer() view returns (uint256)',
+  'function badDebtAccumulated() view returns (uint256)',
+  'function effectiveCeiling() view returns (uint256)',
+  'function systemHealth() view returns (uint256)',
+];
+
+// ── Contracts ─────────────────────────────────────────────────────────────────
+const prov = new ethers.providers.JsonRpcProvider(RPC);
+const indexC  = new ethers.Contract(ADDR.index,      INDEX_ABI,  prov);
+const oracleC = new ethers.Contract(ADDR.oracle,     ORACLE_ABI, prov);
+const ctrlC   = new ethers.Contract(ADDR.controller, CTRL_ABI,   prov);
+const vaultC  = new ethers.Contract(ADDR.vault,      VAULT_ABI,  prov);
+
+let writeIndexC = null, signer = null, countdown = 30;
+
+// ── Formatting ────────────────────────────────────────────────────────────────
+const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
+const fWPLS = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(6) + ' WPLS';
+const fPct  = (cur, ref) => {
+  const c = +ethers.utils.formatUnits(cur, 18), r = +ethers.utils.formatUnits(ref, 18);
+  if (!r) return { s: '—', cls: 'dim' };
+  const p = (c - r) / r * 100;
+  return { s: (p >= 0 ? '+' : '') + p.toFixed(3) + '%', cls: p > 0.005 ? 'up' : p < -0.005 ? 'down' : 'dim' };
+};
+const fGwei = wei => {
+  const g = +ethers.utils.formatUnits(ethers.BigNumber.from(wei), 9);
+  return g < 1 ? wei + ' wei' : g.toFixed(3) + ' gwei';
+};
+const b32s  = b => ethers.utils.toUtf8String(b).replace(/\0/g, '');
+const ago   = ts => { const s = Math.floor(Date.now()/1000) - +ts; return s < 60 ? s+'s' : s < 3600 ? Math.floor(s/60)+'m' : Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m'; };
+const cls18 = bn => { const n = +ethers.utils.formatUnits(bn, 18); return n > 1.00005 ? 'up' : n < 0.99995 ? 'down' : 'neutral'; };
+const tag   = (txt, type) => `<span class="tag ${type}">${txt}</span>`;
+const kv    = (k, v, vcls='') => `<div class="kv"><span class="k">${k}</span><span class="v ${vcls}">${v}</span></div>`;
+
+// ── Main refresh ──────────────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    // Fetch everything in parallel
+    const [
+      idxPeek, rawIdx, spotIdx, idxHealthy, count, wplsW, gasW, lastGas, initGas,
+      oraclePeek, oracleHealthy, creepState,
+      R, r, lastEpoch, epochCount, epochDur, limHits, frozenEps, emergEps, deadbands,
+      totalDebt, totalColl, surplus, badDebt, ceiling, sysHealth,
+    ] = await Promise.all([
+      indexC.peek(), indexC.lastRawIndex(), indexC.currentRawIndex(),
+      indexC.isHealthy(), indexC.componentCount(),
+      indexC.wplsWeightBps(), indexC.gasWeightBps(),
+      indexC.lastGasPrice(), indexC.initialGasPrice(),
+      oracleC.peek(), oracleC.isHealthy(), oracleC.getCreepingState(),
+      ctrlC.R(), ctrlC.r(), ctrlC.lastEpochTime(), ctrlC.epochCount(),
+      ctrlC.EPOCH_DURATION(), ctrlC.limiterHits(), ctrlC.frozenEpochs(),
+      ctrlC.emergencyEpochs(), ctrlC.deadbandSkips(),
+      vaultC.totalDebt(), vaultC.totalCollateral(),
+      vaultC.surplusBuffer(), vaultC.badDebtAccumulated(),
+      vaultC.effectiveCeiling(), vaultC.systemHealth(),
+    ]);
+
+    const accepted = idxPeek.index;
+    const P        = oraclePeek.price;
+    const capped   = !rawIdx.eq(accepted);
+
+    // ── Accepted index card ───────────────────────────────────────────────
+    document.getElementById('val-accepted').textContent = f18(accepted);
+    document.getElementById('val-accepted').className = 'big ' + cls18(accepted);
+    document.getElementById('meta-accepted').innerHTML =
+      tag(idxHealthy ? '● Healthy' : '● Stale', idxHealthy ? 'ok' : 'bad') +
+      `<span>Updated ${ago(idxPeek.timestamp)} ago</span>` +
+      (capped ? tag('Capped', 'warn') : '');
+
+    // ── Spot index card ───────────────────────────────────────────────────
+    document.getElementById('val-spot').textContent = f18(spotIdx);
+    document.getElementById('val-spot').className = 'big ' + cls18(spotIdx);
+    const spotN = +ethers.utils.formatUnits(spotIdx, 18);
+    const accN  = +ethers.utils.formatUnits(accepted, 18);
+    const updNeeded = spotN !== accN ? Math.ceil(Math.abs(spotN - accN) / (accN * 0.01)) : 0;
+    document.getElementById('meta-spot').innerHTML =
+      `<span class="dim">Stored raw: ${f18(rawIdx)}</span>` +
+      (updNeeded > 0 ? tag(`~${updNeeded} update${updNeeded>1?'s':''} to close`, 'warn') : tag('Accepted is current', 'ok'));
+
+    // ── R card ────────────────────────────────────────────────────────────
+    document.getElementById('val-R').textContent = fWPLS(R);
+    const rPct  = +ethers.utils.formatUnits(r, 16); // annualized %
+    document.getElementById('meta-R').innerHTML =
+      `<span>Rate: <b class="${rPct > 0 ? 'up' : 'dim'}">${rPct.toFixed(3)}%</b>/yr</span>` +
+      tag(`Epoch #${epochCount}`, 'info');
+
+    // ── P card ────────────────────────────────────────────────────────────
+    document.getElementById('val-P').textContent = fWPLS(P);
+    const prRatio  = +ethers.utils.formatUnits(P, 18) / +ethers.utils.formatUnits(R, 18);
+    const prPct    = (prRatio - 1) * 100;
+    const prCls    = prPct > 0.1 ? 'up' : prPct < -0.1 ? 'down' : 'neutral';
+    document.getElementById('val-P').className = 'big ' + prCls;
+    document.getElementById('meta-P').innerHTML =
+      tag(oracleHealthy ? '● Healthy' : '● Stale', oracleHealthy ? 'ok' : 'bad') +
+      `<span class="${prCls}">P/R: ${(prRatio * 100).toFixed(3)}%</span>` +
+      (creepState.isCreeping ? tag(`Creeping ${creepState.confs}/3`, 'warn') : '');
+
+    // ── Protocol state card ───────────────────────────────────────────────
+    const nowTs  = Math.floor(Date.now() / 1000);
+    const nextEp = +lastEpoch + +epochDur - nowTs;
+    const epochDurMin = Math.floor(+epochDur / 60);
+    document.getElementById('pr-section').innerHTML =
+      kv('P / R',       `${(prRatio*100).toFixed(4)}%`, prCls) +
+      kv('Stability fee r', `${rPct.toFixed(4)}% / yr`, rPct > 0 ? 'up' : 'dim') +
+      kv('Next epoch',  nextEp > 0 ? `${Math.floor(nextEp/60)}m ${nextEp%60}s` : 'Due now', nextEp <= 0 ? 'warn' : 'dim') +
+      kv('Epoch duration', `${epochDurMin}m`) +
+      kv('Epochs run',  `${epochCount}`) +
+      kv('Frozen / Emergency', `${frozenEps} / ${emergEps}`, +frozenEps > 0 || +emergEps > 0 ? 'warn' : 'dim') +
+      kv('Deadband skips / Limiter hits', `${deadbands} / ${limHits}`, 'dim');
+
+    // ── Theoretical card ──────────────────────────────────────────────────
+    // If Controller v2 launched today with current R as baseline, and R drifted with the index:
+    const Rn = +ethers.utils.formatUnits(R, 18);
+    const indexN = +ethers.utils.formatUnits(accepted, 18);
+    const R_native = Rn * indexN;
+    const Pn = +ethers.utils.formatUnits(P, 18);
+    const prNative = Pn / R_native;
+    const prNativePct = (prNative - 1) * 100;
+    const prNativeCls = prNativePct > 0.1 ? 'up' : prNativePct < -0.1 ? 'down' : 'neutral';
+    const indexGapPct = (indexN - 1) * 100;
+
+    document.getElementById('theory-section').innerHTML = `
+      <div class="theory-highlight">
+        <div class="theory-row"><span class="tk">Current R (protocol)</span>     <span class="tv">${fWPLS(R)}</span></div>
+        <div class="theory-row"><span class="tk">Index multiplier</span>          <span class="tv">${f18(accepted)}</span></div>
+        <div class="theory-row"><span class="tk">Native target R = R × index</span><span class="tv" style="color:var(--accent)">${R_native.toFixed(6)} WPLS</span></div>
+        <div class="theory-row"><span class="tk">Gap from current R</span>         <span class="tv ${indexGapPct >= 0 ? 'up' : 'down'}">${(indexGapPct >= 0 ? '+' : '')}${indexGapPct.toFixed(4)}%</span></div>
+      </div>
+      <div class="theory-row"><span class="tk">P / Native R</span>  <span class="tv ${prNativeCls}">${(prNative*100).toFixed(4)}%</span></div>
+      <div class="theory-row" style="padding-top:6px"><span class="tk" style="font-size:11px;color:var(--muted)">P / Native R shows whether SunPLS would be above or below par if R were tracking native purchasing power today.</span></div>
+    `;
+
+    // ── Basket breakdown ──────────────────────────────────────────────────
+    const rows = [];
+    rows.push({ sym:'WPLS', w:+wplsW, init:'1.0000', cur:'1.0000', pct:{s:'+0.000%',cls:'dim'}, contrib:(+wplsW/100).toFixed(2)+'%' });
+
+    for (let i = 0; i < +count; i++) {
+      const c = await indexC.component(i);
+      const sym = b32s(c.symbol), w = +c.weightBps;
+      const init = (+ethers.utils.formatUnits(c.initialPrice, 18)).toFixed(4);
+      const cur  = (+ethers.utils.formatUnits(c.lastPrice,    18)).toFixed(4);
+      const pct  = fPct(c.lastPrice, c.initialPrice);
+      const contrib = (w * +cur / +init / 100).toFixed(2) + '%';
+      rows.push({ sym, w, init, cur, pct, contrib, ts: +c.lastPriceTimestamp });
+    }
+
+    if (+gasW > 0) {
+      const gRatio = +lastGas / +initGas;
+      const gp = (gRatio - 1) * 100;
+      rows.push({
+        sym:'GAS', w:+gasW,
+        init: fmtGwei(initGas), cur: fmtGwei(lastGas),
+        pct: { s:(gp>=0?'+':'')+gp.toFixed(2)+'%', cls:gp>0.005?'up':gp<-0.005?'down':'dim' },
+        contrib: (+gasW * gRatio / 100).toFixed(2) + '%',
+      });
+    }
+
+    const bTbody = document.getElementById('basket-body');
+    bTbody.innerHTML = '';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><b>${r.sym}</b></td><td class="dim">${(r.w/100).toFixed(0)}%</td><td class="dim">${r.init}</td><td>${r.cur}</td><td class="${r.pct.cls}">${r.pct.s}</td><td>${r.contrib}${r.ts?`<br><span class="dim" style="font-size:10px">${ago(r.ts)} ago</span>`:''}`;
+      bTbody.appendChild(tr);
+    }
+
+    // ── Protocol stats ────────────────────────────────────────────────────
+    const sysHealthPct = (+sysHealth / 100).toFixed(2);
+    const debtFmt   = parseFloat(ethers.utils.formatUnits(totalDebt,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
+    const collFmt   = parseFloat(ethers.utils.formatUnits(totalColl,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
+    const ceilFmt   = parseFloat(ethers.utils.formatUnits(ceiling,    18)).toLocaleString(undefined, {maximumFractionDigits:0});
+    const utilPct   = +ceiling > 0 ? (+ethers.utils.formatUnits(totalDebt,18) / +ethers.utils.formatUnits(ceiling,18) * 100).toFixed(2) + '%' : '—';
+    const badDebtN  = +ethers.utils.formatUnits(badDebt,  18);
+    const surplusN  = +ethers.utils.formatUnits(surplus,  18);
+    const healthCls = +sysHealth > 15000 ? 'up' : +sysHealth > 12000 ? 'warn' : 'down';
+
+    document.getElementById('protocol-stats').innerHTML =
+      kv('System CR',       sysHealthPct + '%', healthCls) +
+      kv('Total debt',      debtFmt + ' SunPLS') +
+      kv('Total collateral',collFmt + ' WPLS') +
+      kv('Debt ceiling',    ceilFmt + ' SunPLS') +
+      kv('Ceiling utilisation', utilPct) +
+      kv('Surplus buffer',  surplusN.toFixed(4) + ' SunPLS', surplusN > 0 ? 'up' : 'dim') +
+      kv('Bad debt',        badDebtN.toFixed(4) + ' SunPLS', badDebtN > 0 ? 'down' : 'dim');
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('footer').textContent = 'Error: ' + e.message;
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function loadHist()  { try { return JSON.parse(localStorage.getItem(HIST_KEY)||'[]'); } catch { return []; } }
+function saveHist(h) { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(-100))); }
+function renderHist() {
+  const hist = loadHist(), tbody = document.getElementById('hist-body');
+  if (!hist.length) { tbody.innerHTML = '<tr><td colspan="7" class="dim">No history yet — call update() to record entries.</td></tr>'; return; }
+  tbody.innerHTML = '';
+  for (const e of [...hist].reverse()) {
+    const delta = e.prevAcc != null ? ((parseFloat(e.accepted) - e.prevAcc) / e.prevAcc * 100) : null;
+    const dStr  = delta != null ? (delta>=0?'+':'')+delta.toFixed(4)+'%' : '—';
+    const dCls  = delta == null ? 'dim' : delta > 0 ? 'up' : delta < 0 ? 'down' : 'dim';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="dim">${new Date(e.time).toLocaleString()}</td><td>${e.accepted}</td><td>${e.raw}</td><td class="${dCls}">${dStr}</td><td>${e.capped?tag('capped','warn'):'—'}</td><td class="dim">${e.R||'—'}</td><td class="dim">${e.P||'—'}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ── Wallet ────────────────────────────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) { alert('No wallet found'); return; }
+  await window.ethereum.request({ method: 'eth_requestAccounts' });
+  const wp = new ethers.providers.Web3Provider(window.ethereum);
+  const net = await wp.getNetwork();
+  if (net.chainId !== 369) {
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{chainId:'0x171'}] }); }
+    catch { alert('Switch to PulseChain (chain ID 369)'); return; }
+  }
+  signer = wp.getSigner();
+  writeIndexC = new ethers.Contract(ADDR.index, INDEX_ABI, signer);
+  const addr = await signer.getAddress();
+  document.getElementById('btn-connect').textContent = addr.slice(0,6)+'…'+addr.slice(-4);
+  document.getElementById('btn-update').disabled = false;
+}
+
+async function callUpdate() {
+  if (!writeIndexC) return;
+  const btn = document.getElementById('btn-update'), msg = document.getElementById('msg');
+  btn.disabled = true; msg.textContent = 'Sending…';
+  try {
+    const tx = await writeIndexC.update();
+    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
+    const receipt = await tx.wait();
+    msg.textContent = '✓ Block ' + receipt.blockNumber;
+
+    const [idxPeek, rawIdx, oraclePeek, R] = await Promise.all([
+      indexC.peek(), indexC.lastRawIndex(), oracleC.peek(), ctrlC.R(),
+    ]);
+    const hist = loadHist();
+    const prev = hist.length ? parseFloat(hist[hist.length-1].accepted) : null;
+    hist.push({
+      time:     Date.now(),
+      accepted: f18(idxPeek.index),
+      raw:      f18(rawIdx),
+      capped:   !rawIdx.eq(idxPeek.index),
+      prevAcc:  prev,
+      R:        fWPLS(R),
+      P:        fWPLS(oraclePeek.price),
+    });
+    saveHist(hist); renderHist(); await refresh();
+  } catch(e) {
+    msg.textContent = 'Error: ' + (e.reason || e.message || e);
+  } finally { btn.disabled = false; }
+}
+
+// ── Tick ──────────────────────────────────────────────────────────────────────
+function fmtGwei(wei) {
+  const g = +ethers.utils.formatUnits(ethers.BigNumber.from(wei.toString()), 9);
+  return g < 1 ? wei + ' wei' : g.toFixed(3) + ' gwei';
+}
+function tick() {
+  countdown--;
+  if (countdown <= 0) { countdown = 30; refresh(); }
+  document.getElementById('footer').textContent =
+    'Last refreshed: ' + new Date().toLocaleTimeString() + '  ·  Next in ' + countdown + 's';
+}
+
+refresh(); renderHist(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
