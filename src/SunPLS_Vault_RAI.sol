@@ -60,7 +60,7 @@ pragma solidity ^0.8.20;
  * I7.  Liveness:         Oracle failure never blocks deposit/repay/withdraw
  * I8.  Fee Routing:      Stability fees flow to pool only — no other path
  * I9.  Pool Latch:       stabilityPool set once, immutable after latch
- * I10. Debt Ceiling:     totalDebt + newMint ≤ DEBT_CEILING always
+ * I10. Debt Ceiling:     totalDebt + newMint ≤ effectiveCeiling() always (time-based schedule)
  * I11. BadDebt Tracking: Uncovered debt → badDebtAccumulated (never silent)
  * I12. Surplus Buffer:   Fees accumulate as surplusBuffer, auto-reconciled
  *
@@ -122,7 +122,7 @@ contract SunPLSVaultRAI is ReentrancyGuard {
     ISunPLSTokenRAI public immutable sunpls;
     IOracleRAI public immutable oracle;
     IControllerRAI public immutable controller;
-    uint256 public immutable DEBT_CEILING;
+    uint256 public immutable DEPLOY_TIME;
     address private immutable deployer;
 
     // ─────────────────────────────────────────────────────────────────────
@@ -236,25 +236,34 @@ contract SunPLSVaultRAI is ReentrancyGuard {
     // Constructor
     // ─────────────────────────────────────────────────────────────────────
 
-    constructor(
-        address _wpls,
-        address _sunpls,
-        address _oracle,
-        address _controller,
-        uint256 _debtCeiling
-    ) {
+    constructor(address _wpls, address _sunpls, address _oracle, address _controller) {
         require(_wpls != address(0), "Zero wpls");
         require(_sunpls != address(0), "Zero sunpls");
         require(_oracle != address(0), "Zero oracle");
         require(_controller != address(0), "Zero controller");
-        require(_debtCeiling > 0, "Zero ceiling");
 
         wpls = IWPLS(_wpls);
         sunpls = ISunPLSTokenRAI(_sunpls);
         oracle = IOracleRAI(_oracle);
         controller = IControllerRAI(_controller);
-        DEBT_CEILING = _debtCeiling;
+        DEPLOY_TIME = block.timestamp;
         deployer = msg.sender;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Time-based debt ceiling (immutable schedule, no admin)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Returns the current debt ceiling based on elapsed time since deploy.
+     *         Schedule is burned into bytecode — no key can change it.
+     *
+     *   0–30 days:  100 000 000 000 SunPLS (100B — 30-day bug-catching window)
+     *   30 days +:  unlimited (type(uint256).max — 150% CR is the real safety net)
+     */
+    function effectiveCeiling() public view returns (uint256) {
+        if (block.timestamp - DEPLOY_TIME < 30 days) return 100_000_000_000e18;
+        return type(uint256).max;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -414,10 +423,10 @@ contract SunPLSVaultRAI is ReentrancyGuard {
 
     function mint(uint256 sunplsAmount) external nonReentrant {
         require(sunplsAmount > 0, "Zero amount");
-        require(totalDebt + sunplsAmount <= DEBT_CEILING, "Debt ceiling breached");
 
         uint256 price = _getOraclePrice();
         _accrueInterest(msg.sender);
+        require(totalDebt + sunplsAmount <= effectiveCeiling(), "Debt ceiling breached");
 
         Vault storage v = vaults[msg.sender];
         require(v.collateral > 0, "No collateral");
@@ -436,12 +445,12 @@ contract SunPLSVaultRAI is ReentrancyGuard {
 
     function depositAndMint(uint256 wplsAmount, uint256 sunplsAmount) external nonReentrant {
         require(wplsAmount > 0 && sunplsAmount > 0, "Zero amounts");
-        require(totalDebt + sunplsAmount <= DEBT_CEILING, "Debt ceiling breached");
 
         IERC20(address(wpls)).safeTransferFrom(msg.sender, address(this), wplsAmount);
 
         uint256 price = _getOraclePrice();
         _accrueInterest(msg.sender);
+        require(totalDebt + sunplsAmount <= effectiveCeiling(), "Debt ceiling breached");
 
         if (!_hasVault[msg.sender]) {
             _hasVault[msg.sender] = true;
@@ -944,8 +953,8 @@ contract SunPLSVaultRAI is ReentrancyGuard {
             systemCR = debtInWpls > 0 ? (totalCollateral * 10_000) / debtInWpls : type(uint256).max;
         }
 
-        debtCeiling = DEBT_CEILING;
-        debtUtilizationBps = DEBT_CEILING > 0 ? (totalDebt * 10_000) / DEBT_CEILING : 0;
+        debtCeiling = effectiveCeiling();
+        debtUtilizationBps = debtCeiling > 0 ? (totalDebt * 10_000) / debtCeiling : 0;
     }
 
     function vaultCount() external view returns (uint256) {
