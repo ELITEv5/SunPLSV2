@@ -308,7 +308,8 @@
     <div class="modal-contracts">
       <span>Contracts —</span>
       <span>Native Index Oracle:</span>     <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9…049A</a>
-      <span>Functional Index Oracle:</span> <a href="https://scan.pulsechain.com/address/0xcd708104fDE8E759970e22B75E9aCe94f3ab8342" target="_blank">0xcd70…8342</a>
+      <span>Functional Index v1:</span>      <a href="https://scan.pulsechain.com/address/0xcd708104fDE8E759970e22B75E9aCe94f3ab8342" target="_blank">0xcd70…8342</a>
+      <span>Functional Index v2:</span>      <a href="https://scan.pulsechain.com/address/0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b" target="_blank">0x5BA5…Ba1b</a>
       <span>Price Oracle:</span>            <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b…e66b</a>
       <span>Controller:</span>              <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828…945</a>
       <span>Vault:</span>                   <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd…29e</a>
@@ -433,11 +434,41 @@
   </table>
 </div>
 
+<!-- ── Functional Index v2 ── -->
+<div class="section-label" style="margin-top:4px">Functional Index v2 &nbsp;·&nbsp; 20% blockspace | 40% market access | 40% depth | 0% collateral &nbsp;·&nbsp; <span style="color:var(--green)">calibrated trade sizes</span></div>
+<div class="grid3" style="margin-bottom:12px">
+  <div class="card accent-border">
+    <div class="clabel">Accepted Functional Index v2</div>
+    <div class="big" id="val-func2-accepted">—</div>
+    <div class="cmeta" id="meta-func2-accepted"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Live Spot (Functional v2)</div>
+    <div class="big" id="val-func2-spot">—</div>
+    <div class="cmeta" id="meta-func2-spot"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Health Overlay v2</div>
+    <div class="big" id="val-func2-health">—</div>
+    <div class="cmeta" id="meta-func2-health"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">v2 Component Breakdown <span class="dim" style="text-transform:none;font-size:10px">(trade sizes calibrated to ~0.5% initial slippage per pool)</span></div>
+  <table>
+    <thead>
+      <tr><th>Component</th><th>Weight</th><th>Value</th><th>Signal</th></tr>
+    </thead>
+    <tbody id="func2-components-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+  </table>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
   <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Native Index</button>
-  <button id="btn-func-update" class="primary" onclick="callFunctionalUpdate()" disabled>Call update() on Functional Oracle</button>
+  <button id="btn-func-update"  class="primary" onclick="callFunctionalUpdate()"   disabled>Call update() on Functional v1</button>
+  <button id="btn-func2-update" class="primary" onclick="callFunctional2Update()" disabled>Call update() on Functional v2</button>
   <span id="msg"></span>
 </div>
 
@@ -459,11 +490,12 @@
 <script>
 // ── Addresses ─────────────────────────────────────────────────────────────────
 const ADDR = {
-  index:      '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
-  functional: '0xcd708104fDE8E759970e22B75E9aCe94f3ab8342',
-  oracle:     '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
-  controller: '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
-  vault:      '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
+  index:       '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
+  functional:  '0xcd708104fDE8E759970e22B75E9aCe94f3ab8342',
+  functional2: '0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b',
+  oracle:      '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
+  controller:  '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
+  vault:       '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
 };
 const RPC      = 'https://rpc.pulsechain.com';
 const HIST_KEY = 'sunpls_idx_hist_v2';
@@ -519,12 +551,13 @@ const FUNC_ABI = [
 // ── Contracts ─────────────────────────────────────────────────────────────────
 const prov = new ethers.providers.JsonRpcProvider(RPC);
 const indexC      = new ethers.Contract(ADDR.index,      INDEX_ABI,  prov);
-const functionalC = new ethers.Contract(ADDR.functional, FUNC_ABI,   prov);
+const functionalC  = new ethers.Contract(ADDR.functional,  FUNC_ABI, prov);
+const functional2C = new ethers.Contract(ADDR.functional2, FUNC_ABI, prov);
 const oracleC     = new ethers.Contract(ADDR.oracle,     ORACLE_ABI, prov);
 const ctrlC       = new ethers.Contract(ADDR.controller, CTRL_ABI,   prov);
 const vaultC      = new ethers.Contract(ADDR.vault,      VAULT_ABI,  prov);
 
-let writeIndexC = null, writeFunctionalC = null, signer = null, countdown = 30;
+let writeIndexC = null, writeFunctionalC = null, writeFunctional2C = null, signer = null, countdown = 30;
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
@@ -552,6 +585,7 @@ async function refresh() {
     const [
       idxPeek, rawIdx, spotIdx, idxHealthy, count, wplsW, gasW, lastGas, initGas,
       funcPeek, funcSpot, funcHealthy, funcComponents,
+      func2Peek, func2Spot, func2Healthy, func2Components,
       oraclePeek, oracleHealthy, creepState,
       R, r, lastEpoch, epochCount, epochDur, limHits, frozenEps, emergEps, deadbands,
       totalDebt, totalColl, surplus, badDebt, ceiling, sysHealth,
@@ -562,6 +596,8 @@ async function refresh() {
       indexC.lastGasPrice(), indexC.initialGasPrice(),
       functionalC.peek(), functionalC.currentRawFunctionalIndex(),
       functionalC.isHealthy(), functionalC.componentSnapshot(),
+      functional2C.peek(), functional2C.currentRawFunctionalIndex(),
+      functional2C.isHealthy(), functional2C.componentSnapshot(),
       oracleC.peek(), oracleC.isHealthy(), oracleC.getCreepingState(),
       ctrlC.R(), ctrlC.r(), ctrlC.lastEpochTime(), ctrlC.epochCount(),
       ctrlC.EPOCH_DURATION(), ctrlC.limiterHits(), ctrlC.frozenEpochs(),
@@ -763,6 +799,65 @@ async function refresh() {
       funcTbody.appendChild(tr);
     }
 
+    // ── Functional Index v2 ───────────────────────────────────────────────
+    const func2Accepted  = func2Peek.index;
+    const func2HealthBps = +func2Peek.healthBps;
+
+    document.getElementById('val-func2-accepted').textContent = f18(func2Accepted);
+    document.getElementById('val-func2-accepted').className   = 'big ' + cls18(func2Accepted);
+    document.getElementById('meta-func2-accepted').innerHTML  =
+      tag(func2Healthy ? '● Healthy' : '● Degraded', func2Healthy ? 'ok' : 'bad') +
+      `<span>Updated ${ago(func2Peek.timestamp)} ago</span>`;
+
+    const func2SpotN = +ethers.utils.formatUnits(func2Spot, 18);
+    const func2AccN  = +ethers.utils.formatUnits(func2Accepted, 18);
+    document.getElementById('val-func2-spot').textContent = f18(func2Spot);
+    document.getElementById('val-func2-spot').className   = 'big ' + cls18(func2Spot);
+    const func2Upd = func2SpotN !== func2AccN
+      ? Math.ceil(Math.abs(func2SpotN - func2AccN) / (func2AccN * 0.01)) : 0;
+    document.getElementById('meta-func2-spot').innerHTML =
+      func2Upd > 0 ? tag(`~${func2Upd} update${func2Upd>1?'s':''} to close`, 'warn')
+                   : tag('Accepted is current', 'ok');
+
+    const health2Cls = func2HealthBps >= 10000 ? 'up' : func2HealthBps >= 7000 ? 'warn' : 'down';
+    document.getElementById('val-func2-health').textContent = (func2HealthBps / 100).toFixed(0) + '%';
+    document.getElementById('val-func2-health').className   = 'big ' + health2Cls;
+
+    const health2Reasons = [];
+    if (!oracleHealthy)                health2Reasons.push('Price oracle stale');
+    if (badDebtN > 0)                   health2Reasons.push('Bad debt present');
+    if (!noDebt && +sysHealth < 12000)  health2Reasons.push('CR critical (<120%)');
+    else if (!noDebt && +sysHealth < 15000) health2Reasons.push('CR degraded (<150%)');
+    const func2AgeS = Math.floor(Date.now() / 1000) - +func2Peek.timestamp;
+    if (func2AgeS > 7200)               health2Reasons.push('Index stale (>2h)');
+
+    const health2Label   = func2HealthBps >= 10000 ? 'Full influence' : func2HealthBps >= 7000 ? 'Reduced' : 'Frozen';
+    const health2TagType = func2HealthBps >= 10000 ? 'ok' : func2HealthBps >= 7000 ? 'warn' : 'bad';
+    document.getElementById('meta-func2-health').innerHTML =
+      tag(health2Label, health2TagType) +
+      (health2Reasons.length ? `<span class="dim"> — ${health2Reasons.join(', ')}</span>` : '');
+
+    const comp2Names   = ['Blockspace Access', 'Market Access', 'Liquidity Depth'];
+    const comp2Weights = ['20%', '40%', '40%'];
+    const comp2Vals    = [
+      func2Components.blockspaceComponent,
+      func2Components.marketAccessComponent,
+      func2Components.liquidityDepthComponent,
+    ];
+    const func2Tbody = document.getElementById('func2-components-body');
+    func2Tbody.innerHTML = '';
+    for (let i = 0; i < comp2Names.length; i++) {
+      const n   = +ethers.utils.formatUnits(comp2Vals[i], 18);
+      const pct = (n - 1) * 100;
+      const cls = pct > 0.05 ? 'up' : pct < -0.05 ? 'down' : 'dim';
+      const sig = n > 1.005 ? 'Rising ↑' : n < 0.995 ? 'Falling ↓' : 'Stable';
+      const tr  = document.createElement('tr');
+      tr.innerHTML = `<td><b>${comp2Names[i]}</b></td><td class="dim">${comp2Weights[i]}</td>`
+        + `<td class="${cls}">${n.toFixed(4)}x</td>`
+        + `<td class="${cls}">${sig} <span style="opacity:.6">(${pct>=0?'+':''}${pct.toFixed(3)}%)</span></td>`;
+      func2Tbody.appendChild(tr);
+    }
+
   } catch(e) {
     console.error(e);
     document.getElementById('footer').textContent = 'Error: ' + e.message;
@@ -798,11 +893,13 @@ async function connectWallet() {
   }
   signer = wp.getSigner();
   writeIndexC      = new ethers.Contract(ADDR.index,      INDEX_ABI, signer);
-  writeFunctionalC = new ethers.Contract(ADDR.functional, FUNC_ABI,  signer);
+  writeFunctionalC  = new ethers.Contract(ADDR.functional,  FUNC_ABI, signer);
+  writeFunctional2C = new ethers.Contract(ADDR.functional2, FUNC_ABI, signer);
   const addr = await signer.getAddress();
-  document.getElementById('btn-connect').textContent = addr.slice(0,6)+'…'+addr.slice(-4);
-  document.getElementById('btn-update').disabled      = false;
-  document.getElementById('btn-func-update').disabled = false;
+  document.getElementById('btn-connect').textContent   = addr.slice(0,6)+'…'+addr.slice(-4);
+  document.getElementById('btn-update').disabled        = false;
+  document.getElementById('btn-func-update').disabled   = false;
+  document.getElementById('btn-func2-update').disabled  = false;
 }
 
 async function callUpdate() {
@@ -841,6 +938,21 @@ async function callFunctionalUpdate() {
   btn.disabled = true; msg.textContent = 'Sending…';
   try {
     const tx = await writeFunctionalC.update();
+    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
+    const receipt = await tx.wait();
+    msg.textContent = '✓ Block ' + receipt.blockNumber;
+    await refresh();
+  } catch(e) {
+    msg.textContent = 'Error: ' + (e.reason || e.message || e);
+  } finally { btn.disabled = false; }
+}
+
+async function callFunctional2Update() {
+  if (!writeFunctional2C) return;
+  const btn = document.getElementById('btn-func2-update'), msg = document.getElementById('msg');
+  btn.disabled = true; msg.textContent = 'Sending…';
+  try {
+    const tx = await writeFunctional2C.update();
     msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
     const receipt = await tx.wait();
     msg.textContent = '✓ Block ' + receipt.blockNumber;
