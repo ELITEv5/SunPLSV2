@@ -243,20 +243,32 @@
     </div>
 
     <div class="modal-section">
-      <h3>Oracle 2 — Functional Purchasing Power Index</h3>
+      <h3>Oracle 2 — Functional Index v2 (calibrated trade sizes)</h3>
       <p>
-        Goes further than token prices. Instead of asking <i>what are native assets worth</i>, it asks:
-        <b>what can one SunPLS actually do inside PulseChain?</b>
+        Measures three economic functions on PulseChain: <b>blockspace cost (20%)</b>, <b>market access
+        slippage (40%)</b>, and <b>liquidity depth (40%)</b>.
+        Trade sizes are derived from live WPLS pool reserves at deploy time, targeting ~0.5% initial
+        slippage: PLSX/WPLS ≈ 509M WPLS, INC/WPLS ≈ 155M WPLS. Collateral access (SunPLS/WPLS)
+        was removed — it was circular. All three components respond to real pool conditions.
+        Runs as the raw-blockspace reference alongside the EMA version.
+      </p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Oracle 3 — Functional Index v3 (EMA blockspace)</h3>
+      <p>
+        Fixes v2's blockspace volatility. Live data showed gas swings dominating the accepted index
+        (oscillating 0.9872x ↔ 1.0100x from gas alone). v3 applies a 10% EMA to the gas price:
+      </p>
+      <p style="font-family:monospace;font-size:12px;background:rgba(167,139,250,.05);padding:10px 12px;border-radius:6px;margin-top:8px;color:var(--accent)">
+        smoothedGas = 0.10 × block.basefee + 0.90 × prevSmoothedGas
       </p>
       <p style="margin-top:10px">
-        It measures four economic functions directly on-chain:
+        A single gas spike contributes only 10% to the smoothed value. Sustained high gas builds up
+        over ~10 updates before reaching 65% of its full effect. The <b>gasSnapshot()</b> function
+        exposes both smoothed and raw gas side-by-side so the monitor can show exactly how much
+        the EMA is dampening vs what raw gas would give. Same weights as v2.
       </p>
-      <ul style="margin-top:8px;padding-left:18px;line-height:2">
-        <li><b>Blockspace Access (30%)</b> — how expensive is it to use the chain at all? Tracks live gas cost relative to the deploy baseline.</li>
-        <li><b>Core Market Access (30%)</b> — how much slippage does it cost to move through PulseChain's deepest pools? Simulates a fixed trade through PLSX/WPLS and INC/WPLS.</li>
-        <li><b>Liquidity Depth (30%)</b> — how much WPLS depth exists in core routes? Thin liquidity means one SunPLS buys less practical access before moving price.</li>
-        <li><b>Collateral Access (10%)</b> — how easy is it to exit SunPLS back into WPLS? Tracks friction in the SunPLS/WPLS pool.</li>
-      </ul>
       <p style="margin-top:10px">
         A separate <b>health overlay</b> reads the live vault, stability pool, and price oracle.
         It can slow or freeze index influence on monetary policy — but it never directly raises R.
@@ -308,8 +320,8 @@
     <div class="modal-contracts">
       <span>Contracts —</span>
       <span>Native Index Oracle:</span>     <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9…049A</a>
-      <span>Functional Index v1:</span>      <a href="https://scan.pulsechain.com/address/0xcd708104fDE8E759970e22B75E9aCe94f3ab8342" target="_blank">0xcd70…8342</a>
       <span>Functional Index v2:</span>      <a href="https://scan.pulsechain.com/address/0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b" target="_blank">0x5BA5…Ba1b</a>
+      <span>Functional Index EMA:</span>    <a href="https://scan.pulsechain.com/address/0x510B3b62653685A4801f62b0aFd37A6f80b4BfB5" target="_blank">0x510B…BfB5</a>
       <span>Price Oracle:</span>            <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b…e66b</a>
       <span>Controller:</span>              <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828…945</a>
       <span>Vault:</span>                   <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd…29e</a>
@@ -405,35 +417,6 @@
 
 </div>
 
-<!-- ── Functional Index ── -->
-<div class="section-label" style="margin-top:4px">Functional Purchasing Power Index &nbsp;·&nbsp; 30% blockspace | 30% market access | 30% depth | 10% collateral</div>
-<div class="grid3" style="margin-bottom:12px">
-  <div class="card accent-border">
-    <div class="clabel">Accepted Functional Index</div>
-    <div class="big" id="val-func-accepted">—</div>
-    <div class="cmeta" id="meta-func-accepted"></div>
-  </div>
-  <div class="card">
-    <div class="clabel">Live Spot (Functional)</div>
-    <div class="big" id="val-func-spot">—</div>
-    <div class="cmeta" id="meta-func-spot"></div>
-  </div>
-  <div class="card">
-    <div class="clabel">Health Overlay</div>
-    <div class="big" id="val-func-health">—</div>
-    <div class="cmeta" id="meta-func-health"></div>
-  </div>
-</div>
-<div class="card" style="margin-bottom:12px">
-  <div class="clabel" style="margin-bottom:10px">Component Breakdown <span class="dim" style="text-transform:none;font-size:10px">(1.0x = no change from deploy)</span></div>
-  <table>
-    <thead>
-      <tr><th>Component</th><th>Weight</th><th>Value</th><th>Signal</th></tr>
-    </thead>
-    <tbody id="func-components-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
-  </table>
-</div>
-
 <!-- ── Functional Index v2 ── -->
 <div class="section-label" style="margin-top:4px">Functional Index v2 &nbsp;·&nbsp; 20% blockspace | 40% market access | 40% depth | 0% collateral &nbsp;·&nbsp; <span style="color:var(--green)">calibrated trade sizes</span></div>
 <div class="grid3" style="margin-bottom:12px">
@@ -463,12 +446,46 @@
   </table>
 </div>
 
+<!-- ── Functional Index EMA (v3) ── -->
+<div class="section-label" style="margin-top:4px">Functional Index v3 — EMA Blockspace &nbsp;·&nbsp; 20% blockspace (EMA 10%) | 40% market | 40% depth &nbsp;·&nbsp; <span style="color:var(--accent)">smoothed gas component</span></div>
+<div class="grid3" style="margin-bottom:12px">
+  <div class="card accent-border">
+    <div class="clabel">Accepted Index (EMA)</div>
+    <div class="big" id="val-ema-accepted">—</div>
+    <div class="cmeta" id="meta-ema-accepted"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Live Spot (EMA-smoothed gas)</div>
+    <div class="big" id="val-ema-spot">—</div>
+    <div class="cmeta" id="meta-ema-spot"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Health Overlay</div>
+    <div class="big" id="val-ema-health">—</div>
+    <div class="cmeta" id="meta-ema-health"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">EMA Component Breakdown <span class="dim" style="text-transform:none;font-size:10px">(blockspace uses smoothed gas — compare raw vs smoothed below)</span></div>
+  <table>
+    <thead>
+      <tr><th>Component</th><th>Weight</th><th>Value</th><th>Signal</th></tr>
+    </thead>
+    <tbody id="ema-components-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+    <tfoot>
+      <tr id="ema-gas-row" style="border-top:1px solid var(--border)">
+        <td colspan="4" class="dim">Awaiting EMA oracle deploy…</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
   <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Native Index</button>
-  <button id="btn-func-update"  class="primary" onclick="callFunctionalUpdate()"   disabled>Call update() on Functional v1</button>
   <button id="btn-func2-update" class="primary" onclick="callFunctional2Update()" disabled>Call update() on Functional v2</button>
+  <button id="btn-ema-update"   class="primary" onclick="callFunctionalEMAUpdate()" disabled>Call update() on Functional EMA</button>
   <span id="msg"></span>
 </div>
 
@@ -490,12 +507,13 @@
 <script>
 // ── Addresses ─────────────────────────────────────────────────────────────────
 const ADDR = {
-  index:       '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
-  functional:  '0xcd708104fDE8E759970e22B75E9aCe94f3ab8342',
-  functional2: '0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b',
-  oracle:      '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
-  controller:  '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
-  vault:       '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
+  index:        '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
+  // functional v1 (0xcd708104fDE8E759970e22B75E9aCe94f3ab8342) removed — market/depth broken (tiny trades)
+  functional2:  '0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b',
+  functionalEMA: '0x510B3b62653685A4801f62b0aFd37A6f80b4BfB5',
+  oracle:       '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
+  controller:   '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
+  vault:        '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
 };
 const RPC      = 'https://rpc.pulsechain.com';
 const HIST_KEY = 'sunpls_idx_hist_v2';
@@ -547,17 +565,24 @@ const FUNC_ABI = [
   'function componentSnapshot() view returns (uint256 blockspaceComponent, uint256 marketAccessComponent, uint256 liquidityDepthComponent, uint256 collateralAccessComponent, uint256 healthBps)',
   'function update() returns (uint256 rawIndex, uint256 acceptedIndex, uint256 healthBps)',
 ];
+const FUNC_EMA_ABI = [
+  ...FUNC_ABI,
+  'function smoothedGasPrice() view returns (uint256)',
+  'function gasEmaAlphaBps() view returns (uint16)',
+  'function gasSnapshot() view returns (uint256 smoothed, uint256 raw, uint256 initial, uint256 smoothedComponent, uint256 rawComponent)',
+];
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
 const prov = new ethers.providers.JsonRpcProvider(RPC);
-const indexC      = new ethers.Contract(ADDR.index,      INDEX_ABI,  prov);
-const functionalC  = new ethers.Contract(ADDR.functional,  FUNC_ABI, prov);
-const functional2C = new ethers.Contract(ADDR.functional2, FUNC_ABI, prov);
-const oracleC     = new ethers.Contract(ADDR.oracle,     ORACLE_ABI, prov);
-const ctrlC       = new ethers.Contract(ADDR.controller, CTRL_ABI,   prov);
-const vaultC      = new ethers.Contract(ADDR.vault,      VAULT_ABI,  prov);
+const indexC        = new ethers.Contract(ADDR.index,        INDEX_ABI,    prov);
+const functional2C  = new ethers.Contract(ADDR.functional2,  FUNC_ABI,     prov);
+const functionalEMAC = new ethers.Contract(ADDR.functionalEMA, FUNC_EMA_ABI, prov);
+const oracleC       = new ethers.Contract(ADDR.oracle,       ORACLE_ABI,   prov);
+const ctrlC         = new ethers.Contract(ADDR.controller,   CTRL_ABI,     prov);
+const vaultC        = new ethers.Contract(ADDR.vault,        VAULT_ABI,    prov);
 
-let writeIndexC = null, writeFunctionalC = null, writeFunctional2C = null, signer = null, countdown = 30;
+let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null,
+    signer = null, countdown = 30;
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
@@ -584,8 +609,8 @@ async function refresh() {
     // Fetch everything in parallel
     const [
       idxPeek, rawIdx, spotIdx, idxHealthy, count, wplsW, gasW, lastGas, initGas,
-      funcPeek, funcSpot, funcHealthy, funcComponents,
       func2Peek, func2Spot, func2Healthy, func2Components,
+      emaPeek, emaSpot, emaHealthy, emaComponents, emaGasSnap,
       oraclePeek, oracleHealthy, creepState,
       R, r, lastEpoch, epochCount, epochDur, limHits, frozenEps, emergEps, deadbands,
       totalDebt, totalColl, surplus, badDebt, ceiling, sysHealth,
@@ -594,10 +619,11 @@ async function refresh() {
       indexC.isHealthy(), indexC.componentCount(),
       indexC.wplsWeightBps(), indexC.gasWeightBps(),
       indexC.lastGasPrice(), indexC.initialGasPrice(),
-      functionalC.peek(), functionalC.currentRawFunctionalIndex(),
-      functionalC.isHealthy(), functionalC.componentSnapshot(),
       functional2C.peek(), functional2C.currentRawFunctionalIndex(),
       functional2C.isHealthy(), functional2C.componentSnapshot(),
+      functionalEMAC.peek(), functionalEMAC.currentRawFunctionalIndex(),
+      functionalEMAC.isHealthy(), functionalEMAC.componentSnapshot(),
+      functionalEMAC.gasSnapshot(),
       oracleC.peek(), oracleC.isHealthy(), oracleC.getCreepingState(),
       ctrlC.R(), ctrlC.r(), ctrlC.lastEpochTime(), ctrlC.epochCount(),
       ctrlC.EPOCH_DURATION(), ctrlC.limiterHits(), ctrlC.frozenEpochs(),
@@ -736,69 +762,6 @@ async function refresh() {
       kv('Surplus buffer',  surplusN.toFixed(4) + ' SunPLS', surplusN > 0 ? 'up' : 'dim') +
       kv('Bad debt',        badDebtN.toFixed(4) + ' SunPLS', badDebtN > 0 ? 'down' : 'dim');
 
-    // ── Functional Index ──────────────────────────────────────────────────
-    const funcAccepted   = funcPeek.index;
-    const funcHealthBps  = +funcPeek.healthBps;
-
-    document.getElementById('val-func-accepted').textContent = f18(funcAccepted);
-    document.getElementById('val-func-accepted').className   = 'big ' + cls18(funcAccepted);
-    document.getElementById('meta-func-accepted').innerHTML  =
-      tag(funcHealthy ? '● Healthy' : '● Degraded', funcHealthy ? 'ok' : 'bad') +
-      `<span>Updated ${ago(funcPeek.timestamp)} ago</span>`;
-
-    const funcSpotN = +ethers.utils.formatUnits(funcSpot, 18);
-    const funcAccN  = +ethers.utils.formatUnits(funcAccepted, 18);
-    document.getElementById('val-func-spot').textContent = f18(funcSpot);
-    document.getElementById('val-func-spot').className   = 'big ' + cls18(funcSpot);
-    const funcUpd = funcSpotN !== funcAccN
-      ? Math.ceil(Math.abs(funcSpotN - funcAccN) / (funcAccN * 0.01)) : 0;
-    document.getElementById('meta-func-spot').innerHTML =
-      funcUpd > 0 ? tag(`~${funcUpd} update${funcUpd>1?'s':''} to close`, 'warn')
-                  : tag('Accepted is current', 'ok');
-
-    const healthCls2 = funcHealthBps >= 10000 ? 'up' : funcHealthBps >= 7000 ? 'warn' : 'down';
-    document.getElementById('val-func-health').textContent = (funcHealthBps / 100).toFixed(0) + '%';
-    document.getElementById('val-func-health').className   = 'big ' + healthCls2;
-
-    // Attribute why health is degraded using data already fetched
-    const healthReasons = [];
-    if (!oracleHealthy)               healthReasons.push('Price oracle stale');
-    if (badDebtN > 0)                  healthReasons.push('Bad debt present');
-    if (!noDebt && +sysHealth < 12000) healthReasons.push('CR critical (<120%)');
-    else if (!noDebt && +sysHealth < 15000) healthReasons.push('CR degraded (<150%)');
-    const funcAgeS = Math.floor(Date.now() / 1000) - +funcPeek.timestamp;
-    if (funcAgeS > 7200)               healthReasons.push('Index stale (>2h)');
-
-    const healthLabel = funcHealthBps >= 10000 ? 'Full influence'
-                      : funcHealthBps >= 7000  ? 'Reduced'
-                      : 'Frozen';
-    const healthTagType = funcHealthBps >= 10000 ? 'ok' : funcHealthBps >= 7000 ? 'warn' : 'bad';
-    document.getElementById('meta-func-health').innerHTML =
-      tag(healthLabel, healthTagType) +
-      (healthReasons.length ? `<span class="dim"> — ${healthReasons.join(', ')}</span>` : '');
-
-    const compNames   = ['Blockspace Access', 'Market Access', 'Liquidity Depth', 'Collateral Access'];
-    const compWeights = ['30%', '30%', '30%', '10%'];
-    const compVals    = [
-      funcComponents.blockspaceComponent,
-      funcComponents.marketAccessComponent,
-      funcComponents.liquidityDepthComponent,
-      funcComponents.collateralAccessComponent,
-    ];
-    const funcTbody = document.getElementById('func-components-body');
-    funcTbody.innerHTML = '';
-    for (let i = 0; i < compNames.length; i++) {
-      const n   = +ethers.utils.formatUnits(compVals[i], 18);
-      const pct = (n - 1) * 100;
-      const cls = pct > 0.05 ? 'up' : pct < -0.05 ? 'down' : 'dim';
-      const sig = n > 1.005 ? 'Rising ↑' : n < 0.995 ? 'Falling ↓' : 'Stable';
-      const tr  = document.createElement('tr');
-      tr.innerHTML = `<td><b>${compNames[i]}</b></td><td class="dim">${compWeights[i]}</td>`
-        + `<td class="${cls}">${n.toFixed(4)}x</td>`
-        + `<td class="${cls}">${sig} <span style="opacity:.6">(${pct>=0?'+':''}${pct.toFixed(3)}%)</span></td>`;
-      funcTbody.appendChild(tr);
-    }
-
     // ── Functional Index v2 ───────────────────────────────────────────────
     const func2Accepted  = func2Peek.index;
     const func2HealthBps = +func2Peek.healthBps;
@@ -858,6 +821,92 @@ async function refresh() {
       func2Tbody.appendChild(tr);
     }
 
+    // ── Functional Index EMA (v3) ─────────────────────────────────────────
+    {
+      const emaAccepted  = emaPeek.index;
+      const emaHealthBps = +emaPeek.healthBps;
+
+      document.getElementById('val-ema-accepted').textContent = f18(emaAccepted);
+      document.getElementById('val-ema-accepted').className   = 'big ' + cls18(emaAccepted);
+      document.getElementById('meta-ema-accepted').innerHTML  =
+        tag(emaHealthy ? '● Healthy' : '● Degraded', emaHealthy ? 'ok' : 'bad') +
+        `<span>Updated ${ago(emaPeek.timestamp)} ago</span>`;
+
+      const emaSpotN = +ethers.utils.formatUnits(emaSpot, 18);
+      const emaAccN  = +ethers.utils.formatUnits(emaAccepted, 18);
+      document.getElementById('val-ema-spot').textContent = f18(emaSpot);
+      document.getElementById('val-ema-spot').className   = 'big ' + cls18(emaSpot);
+      const emaUpd = emaSpotN !== emaAccN
+        ? Math.ceil(Math.abs(emaSpotN - emaAccN) / (emaAccN * 0.01)) : 0;
+      document.getElementById('meta-ema-spot').innerHTML =
+        emaUpd > 0 ? tag(`~${emaUpd} update${emaUpd>1?'s':''} to close`, 'warn')
+                   : tag('Accepted is current', 'ok');
+
+      const emaHealthCls = emaHealthBps >= 10000 ? 'up' : emaHealthBps >= 7000 ? 'warn' : 'down';
+      document.getElementById('val-ema-health').textContent = (emaHealthBps / 100).toFixed(0) + '%';
+      document.getElementById('val-ema-health').className   = 'big ' + emaHealthCls;
+
+      const emaHealthReasons = [];
+      if (!oracleHealthy)                emaHealthReasons.push('Price oracle stale');
+      if (badDebtN > 0)                  emaHealthReasons.push('Bad debt present');
+      if (!noDebt && +sysHealth < 12000) emaHealthReasons.push('CR critical (<120%)');
+      else if (!noDebt && +sysHealth < 15000) emaHealthReasons.push('CR degraded (<150%)');
+      const emaAgeS = Math.floor(Date.now() / 1000) - +emaPeek.timestamp;
+      if (emaAgeS > 7200)                emaHealthReasons.push('Index stale (>2h)');
+
+      const emaHealthLabel   = emaHealthBps >= 10000 ? 'Full influence' : emaHealthBps >= 7000 ? 'Reduced' : 'Frozen';
+      const emaHealthTagType = emaHealthBps >= 10000 ? 'ok' : emaHealthBps >= 7000 ? 'warn' : 'bad';
+      document.getElementById('meta-ema-health').innerHTML =
+        tag(emaHealthLabel, emaHealthTagType) +
+        (emaHealthReasons.length ? `<span class="dim"> — ${emaHealthReasons.join(', ')}</span>` : '');
+
+      // Component table
+      const emaCompNames   = ['Blockspace (EMA-smoothed)', 'Market Access', 'Liquidity Depth'];
+      const emaCompWeights = ['20%', '40%', '40%'];
+      const emaCompVals    = [
+        emaComponents.blockspaceComponent,
+        emaComponents.marketAccessComponent,
+        emaComponents.liquidityDepthComponent,
+      ];
+      const emaTbody = document.getElementById('ema-components-body');
+      emaTbody.innerHTML = '';
+      for (let i = 0; i < emaCompNames.length; i++) {
+        const n   = +ethers.utils.formatUnits(emaCompVals[i], 18);
+        const pct = (n - 1) * 100;
+        const cls = pct > 0.05 ? 'up' : pct < -0.05 ? 'down' : 'dim';
+        const sig = n > 1.005 ? 'Rising ↑' : n < 0.995 ? 'Falling ↓' : 'Stable';
+        const tr  = document.createElement('tr');
+        tr.innerHTML = `<td><b>${emaCompNames[i]}</b></td><td class="dim">${emaCompWeights[i]}</td>`
+          + `<td class="${cls}">${n.toFixed(4)}x</td>`
+          + `<td class="${cls}">${sig} <span style="opacity:.6">(${pct>=0?'+':''}${pct.toFixed(3)}%)</span></td>`;
+        emaTbody.appendChild(tr);
+      }
+
+      // Gas comparison row: smoothed vs raw
+      if (emaGasSnap) {
+        const smG  = +ethers.utils.formatUnits(emaGasSnap.smoothed, 9);
+        const rvG  = +ethers.utils.formatUnits(emaGasSnap.raw, 9);
+        const initG= +ethers.utils.formatUnits(emaGasSnap.initial, 9);
+        const smC  = +ethers.utils.formatUnits(emaGasSnap.smoothedComponent, 18);
+        const rvC  = +ethers.utils.formatUnits(emaGasSnap.rawComponent, 18);
+        const diff = (smC - rvC) * 100;
+        document.getElementById('ema-gas-row').innerHTML =
+          `<td><b>Gas — smoothed vs raw</b></td>` +
+          `<td class="dim">EMA 10%</td>` +
+          `<td>` +
+            `<span class="${smC>1.00005?'up':smC<0.99995?'down':'dim'}">${smC.toFixed(4)}x</span>` +
+            `<span class="dim" style="font-size:11px"> (${smG.toFixed(3)} gwei smoothed)</span>` +
+          `</td>` +
+          `<td>` +
+            `<span class="dim">Raw: ${rvC.toFixed(4)}x (${rvG.toFixed(3)} gwei)</span>` +
+            `<span style="font-size:11px;margin-left:6px;` +
+              `color:${Math.abs(diff)>0.05?(diff>0?'var(--green)':'var(--red)'):'var(--muted)'}">` +
+              `EMA ${diff>=0?'dampened spike +':'ahead of raw '}${Math.abs(diff).toFixed(3)}%` +
+            `</span>` +
+          `</td>`;
+      }
+    }
+
   } catch(e) {
     console.error(e);
     document.getElementById('footer').textContent = 'Error: ' + e.message;
@@ -892,14 +941,14 @@ async function connectWallet() {
     catch { alert('Switch to PulseChain (chain ID 369)'); return; }
   }
   signer = wp.getSigner();
-  writeIndexC      = new ethers.Contract(ADDR.index,      INDEX_ABI, signer);
-  writeFunctionalC  = new ethers.Contract(ADDR.functional,  FUNC_ABI, signer);
-  writeFunctional2C = new ethers.Contract(ADDR.functional2, FUNC_ABI, signer);
+  writeIndexC         = new ethers.Contract(ADDR.index,        INDEX_ABI,    signer);
+  writeFunctional2C   = new ethers.Contract(ADDR.functional2,  FUNC_ABI,     signer);
+  writeFunctionalEMAC = new ethers.Contract(ADDR.functionalEMA, FUNC_EMA_ABI, signer);
   const addr = await signer.getAddress();
   document.getElementById('btn-connect').textContent   = addr.slice(0,6)+'…'+addr.slice(-4);
-  document.getElementById('btn-update').disabled        = false;
-  document.getElementById('btn-func-update').disabled   = false;
-  document.getElementById('btn-func2-update').disabled  = false;
+  document.getElementById('btn-update').disabled       = false;
+  document.getElementById('btn-func2-update').disabled = false;
+  document.getElementById('btn-ema-update').disabled   = false;
 }
 
 async function callUpdate() {
@@ -932,12 +981,12 @@ async function callUpdate() {
   } finally { btn.disabled = false; }
 }
 
-async function callFunctionalUpdate() {
-  if (!writeFunctionalC) return;
-  const btn = document.getElementById('btn-func-update'), msg = document.getElementById('msg');
+async function callFunctional2Update() {
+  if (!writeFunctional2C) return;
+  const btn = document.getElementById('btn-func2-update'), msg = document.getElementById('msg');
   btn.disabled = true; msg.textContent = 'Sending…';
   try {
-    const tx = await writeFunctionalC.update();
+    const tx = await writeFunctional2C.update();
     msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
     const receipt = await tx.wait();
     msg.textContent = '✓ Block ' + receipt.blockNumber;
@@ -947,12 +996,12 @@ async function callFunctionalUpdate() {
   } finally { btn.disabled = false; }
 }
 
-async function callFunctional2Update() {
-  if (!writeFunctional2C) return;
-  const btn = document.getElementById('btn-func2-update'), msg = document.getElementById('msg');
+async function callFunctionalEMAUpdate() {
+  if (!writeFunctionalEMAC) return;
+  const btn = document.getElementById('btn-ema-update'), msg = document.getElementById('msg');
   btn.disabled = true; msg.textContent = 'Sending…';
   try {
-    const tx = await writeFunctional2C.update();
+    const tx = await writeFunctionalEMAC.update();
     msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
     const receipt = await tx.wait();
     msg.textContent = '✓ Block ' + receipt.blockNumber;
