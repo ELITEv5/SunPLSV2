@@ -764,7 +764,7 @@ async function refresh() {
 
     // ── Functional Index v2 ───────────────────────────────────────────────
     const func2Accepted  = func2Peek.index;
-    const func2HealthBps = +func2Peek.healthBps;
+    const func2HealthBps = +func2Components.healthBps; // live, not stored-at-last-update
 
     document.getElementById('val-func2-accepted').textContent = f18(func2Accepted);
     document.getElementById('val-func2-accepted').className   = 'big ' + cls18(func2Accepted);
@@ -824,7 +824,7 @@ async function refresh() {
     // ── Functional Index EMA (v3) ─────────────────────────────────────────
     {
       const emaAccepted  = emaPeek.index;
-      const emaHealthBps = +emaPeek.healthBps;
+      const emaHealthBps = +emaComponents.healthBps; // live, not stored-at-last-update
 
       document.getElementById('val-ema-accepted').textContent = f18(emaAccepted);
       document.getElementById('val-ema-accepted').className   = 'big ' + cls18(emaAccepted);
@@ -901,7 +901,7 @@ async function refresh() {
             `<span class="dim">Raw: ${rvC.toFixed(4)}x (${rvG.toFixed(3)} gwei)</span>` +
             `<span style="font-size:11px;margin-left:6px;` +
               `color:${Math.abs(diff)>0.05?(diff>0?'var(--green)':'var(--red)'):'var(--muted)'}">` +
-              `EMA ${diff>=0?'dampened spike +':'ahead of raw '}${Math.abs(diff).toFixed(3)}%` +
+              `${diff>=0?'EMA decay lag: +':'EMA absorbing spike: +'}${Math.abs(diff).toFixed(3)}%` +
             `</span>` +
           `</td>`;
       }
