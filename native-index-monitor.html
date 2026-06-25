@@ -680,17 +680,19 @@ async function refresh() {
     }
 
     // ── Protocol stats ────────────────────────────────────────────────────
-    const sysHealthPct = (+sysHealth / 100).toFixed(2);
+    const debtN      = +ethers.utils.formatUnits(totalDebt, 18);
+    const noDebt     = debtN === 0;
+    const sysHealthPct = noDebt ? '∞' : (+sysHealth / 100).toFixed(2) + '%';
     const debtFmt   = parseFloat(ethers.utils.formatUnits(totalDebt,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
     const collFmt   = parseFloat(ethers.utils.formatUnits(totalColl,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
     const ceilFmt   = parseFloat(ethers.utils.formatUnits(ceiling,    18)).toLocaleString(undefined, {maximumFractionDigits:0});
-    const utilPct   = +ceiling > 0 ? (+ethers.utils.formatUnits(totalDebt,18) / +ethers.utils.formatUnits(ceiling,18) * 100).toFixed(2) + '%' : '—';
+    const utilPct   = noDebt ? '0.00%' : (+ethers.utils.formatUnits(totalDebt,18) / +ethers.utils.formatUnits(ceiling,18) * 100).toFixed(2) + '%';
     const badDebtN  = +ethers.utils.formatUnits(badDebt,  18);
     const surplusN  = +ethers.utils.formatUnits(surplus,  18);
-    const healthCls = +sysHealth > 15000 ? 'up' : +sysHealth > 12000 ? 'warn' : 'down';
+    const healthCls = noDebt ? 'up' : +sysHealth > 15000 ? 'up' : +sysHealth > 12000 ? 'warn' : 'down';
 
     document.getElementById('protocol-stats').innerHTML =
-      kv('System CR',       sysHealthPct + '%', healthCls) +
+      kv('System CR',       sysHealthPct, healthCls) +
       kv('Total debt',      debtFmt + ' SunPLS') +
       kv('Total collateral',collFmt + ' WPLS') +
       kv('Debt ceiling',    ceilFmt + ' SunPLS') +
