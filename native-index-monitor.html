@@ -723,9 +723,23 @@ async function refresh() {
     const healthCls2 = funcHealthBps >= 10000 ? 'up' : funcHealthBps >= 7000 ? 'warn' : 'down';
     document.getElementById('val-func-health').textContent = (funcHealthBps / 100).toFixed(0) + '%';
     document.getElementById('val-func-health').className   = 'big ' + healthCls2;
-    document.getElementById('meta-func-health').innerHTML  =
-      tag(funcHealthBps >= 10000 ? 'Full influence' : funcHealthBps >= 7000 ? 'Reduced' : 'Frozen',
-          funcHealthBps >= 10000 ? 'ok' : funcHealthBps >= 7000 ? 'warn' : 'bad');
+
+    // Attribute why health is degraded using data already fetched
+    const healthReasons = [];
+    if (!oracleHealthy)               healthReasons.push('Price oracle stale');
+    if (badDebtN > 0)                  healthReasons.push('Bad debt present');
+    if (!noDebt && +sysHealth < 12000) healthReasons.push('CR critical (<120%)');
+    else if (!noDebt && +sysHealth < 15000) healthReasons.push('CR degraded (<150%)');
+    const funcAgeS = Math.floor(Date.now() / 1000) - +funcPeek.timestamp;
+    if (funcAgeS > 7200)               healthReasons.push('Index stale (>2h)');
+
+    const healthLabel = funcHealthBps >= 10000 ? 'Full influence'
+                      : funcHealthBps >= 7000  ? 'Reduced'
+                      : 'Frozen';
+    const healthTagType = funcHealthBps >= 10000 ? 'ok' : funcHealthBps >= 7000 ? 'warn' : 'bad';
+    document.getElementById('meta-func-health').innerHTML =
+      tag(healthLabel, healthTagType) +
+      (healthReasons.length ? `<span class="dim"> — ${healthReasons.join(', ')}</span>` : '');
 
     const compNames   = ['Blockspace Access', 'Market Access', 'Liquidity Depth', 'Collateral Access'];
     const compWeights = ['30%', '30%', '30%', '10%'];
