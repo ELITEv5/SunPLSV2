@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SunPLS · Native Index Monitor</title>
+  <title>SunPLS · Purchasing Power Monitor</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     :root {
@@ -214,9 +214,9 @@
     </div>
 
     <p class="tagline">
-      This page is a live theoretical test — running a new purchasing power oracle alongside
+      This page is a live theoretical test — running two new purchasing power oracles alongside
       the deployed SunPLS protocol to see if they could work together one day.
-      No code has changed. Nothing is wired together yet. We are just watching the data.
+      No code has changed. Nothing is wired into the controller yet. We are just watching the data.
     </p>
 
     <div class="modal-section">
@@ -230,12 +230,12 @@
     </div>
 
     <div class="modal-section">
-      <h3>What is the Native Index</h3>
+      <h3>Oracle 1 — Native Asset Basket Index</h3>
       <p>
-        A new on-chain oracle that tracks a basket of PulseChain-native assets, all
-        denominated in WPLS. It starts at <b>1.0×</b> and is capped at <b>1% movement per update</b>
-        — slow and deliberate, resistant to manipulation. Every price comes from PulseX V1
-        on-chain liquidity. No Chainlink. No external feeds. The chain prices itself.
+        Tracks a basket of PulseChain-native assets denominated in WPLS. Starts at <b>1.0×</b>
+        and is capped at <b>1% movement per update</b> — slow and deliberate.
+        Every price comes from PulseX V1 on-chain liquidity. No Chainlink. No external feeds.
+        The chain prices itself.
       </p>
       <div class="basket-pills" style="margin-top:12px">
         <span>50% WPLS</span><span>20% PLSX</span><span>10% INC</span><span>10% HEX</span><span>10% Gas</span>
@@ -243,17 +243,38 @@
     </div>
 
     <div class="modal-section">
+      <h3>Oracle 2 — Functional Purchasing Power Index</h3>
+      <p>
+        Goes further than token prices. Instead of asking <i>what are native assets worth</i>, it asks:
+        <b>what can one SunPLS actually do inside PulseChain?</b>
+      </p>
+      <p style="margin-top:10px">
+        It measures four economic functions directly on-chain:
+      </p>
+      <ul style="margin-top:8px;padding-left:18px;line-height:2">
+        <li><b>Blockspace Access (30%)</b> — how expensive is it to use the chain at all? Tracks live gas cost relative to the deploy baseline.</li>
+        <li><b>Core Market Access (30%)</b> — how much slippage does it cost to move through PulseChain's deepest pools? Simulates a fixed trade through PLSX/WPLS and INC/WPLS.</li>
+        <li><b>Liquidity Depth (30%)</b> — how much WPLS depth exists in core routes? Thin liquidity means one SunPLS buys less practical access before moving price.</li>
+        <li><b>Collateral Access (10%)</b> — how easy is it to exit SunPLS back into WPLS? Tracks friction in the SunPLS/WPLS pool.</li>
+      </ul>
+      <p style="margin-top:10px">
+        A separate <b>health overlay</b> reads the live vault, stability pool, and price oracle.
+        It can slow or freeze index influence on monetary policy — but it never directly raises R.
+      </p>
+    </div>
+
+    <div class="modal-section">
       <h3>The Hypothesis</h3>
       <p>
-        What if <b>R tracked the index?</b> As PulseChain grows — more usage, stronger native tokens,
-        rising gas demand — the index rises, and R rises with it. SunPLS holders would not hold
-        a static peg. They would hold a claim on <b>PulseChain's own purchasing power</b>,
+        What if <b>R tracked functional purchasing power?</b> As PulseChain grows — more chain usage,
+        deeper liquidity, rising gas demand — the index rises and R rises with it. SunPLS holders
+        would not hold a static peg. They would hold a claim on <b>PulseChain's own economic function</b>,
         appreciating slowly as the ecosystem expands.
       </p>
-      <p>
+      <p style="margin-top:10px">
         This is fundamentally different from every stablecoin today. Not pegged to USD.
-        Not pegged to gold. Not algorithmic in an unstable way. Pegged to the chain itself —
-        and still fully collateralised and redeemable at all times.
+        Not pegged to gold. Not a token index. Pegged to <b>measurable economic activity</b> on the
+        chain it lives on — and still fully collateralised and redeemable at all times.
       </p>
     </div>
 
@@ -262,19 +283,23 @@
     <div class="modal-section">
       <h3>What we're watching</h3>
       <ul>
-        <li>Does the index move in ways that are <b>economically meaningful</b> — tracking real PulseChain activity rather than noise?</li>
+        <li>Do both indices move in ways that are <b>economically meaningful</b> — tracking real PulseChain conditions rather than noise?</li>
+        <li>Do the two indices <b>agree or diverge</b>? Persistent divergence tells us something important about what each one actually measures.</li>
         <li>Does the <b>P / Native R</b> ratio stay close to 100%? That would mean the market would naturally find equilibrium under this regime.</li>
-        <li>Are borrowers and holders <b>not destabilised</b> by slow, capped R movement?</li>
+        <li>Does the functional index give <b>different information</b> than the asset basket — or is it just a noisier version of the same signal?</li>
+        <li>Are borrowers and holders <b>not destabilised</b> by slow, capped index movement?</li>
       </ul>
     </div>
 
     <div class="modal-section">
       <h3>What success looks like</h3>
       <p>
-        Over weeks and months the index drifts smoothly. The P / Native R ratio behaves like the
-        current P / R ratio — healthy, mean-reverting, close to par. If that holds,
-        <b>Controller v2</b> wires the index in as a parallel deploy alongside the live protocol.
-        SunPLS becomes the first CDP asset with a monetary policy set by the chain it lives on.
+        Over weeks and months both indices drift slowly and meaningfully. P / Native R stays
+        close to par. The functional index provides signal that the asset basket misses.
+        The health overlay behaves correctly under stress. If that holds,
+        <b>Controller v2</b> wires one or both indices in as a parallel deploy alongside the live protocol.
+        SunPLS becomes the first CDP asset with a monetary policy set by the chain it lives on —
+        not by a dollar peg, not by token prices, but by <b>what the chain can do</b>.
       </p>
     </div>
 
@@ -282,10 +307,11 @@
 
     <div class="modal-contracts">
       <span>Contracts —</span>
-      <span>Index Oracle:</span> <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9…049A</a>
-      <span>Price Oracle:</span> <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b…e66b</a>
-      <span>Controller:</span>  <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828…945</a>
-      <span>Vault:</span>       <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd…29e</a>
+      <span>Native Index Oracle:</span>     <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9…049A</a>
+      <span>Functional Index Oracle:</span> <a href="https://scan.pulsechain.com/address/0xcd708104fDE8E759970e22B75E9aCe94f3ab8342" target="_blank">0xcd70…8342</a>
+      <span>Price Oracle:</span>            <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b…e66b</a>
+      <span>Controller:</span>              <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828…945</a>
+      <span>Vault:</span>                   <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd…29e</a>
     </div>
   </div>
 </div>
@@ -307,8 +333,8 @@
       </g>
     </svg>
     <div>
-      <h1>SunPLS &middot; Native Index Monitor</h1>
-      <div class="sub">Live theoretical test &nbsp;·&nbsp; PulseChain</div>
+      <h1>SunPLS &middot; Purchasing Power Monitor</h1>
+      <div class="sub">Live theoretical test &nbsp;·&nbsp; PulseChain &nbsp;·&nbsp; Native Index + Functional Index</div>
     </div>
   </div>
   <button class="about-btn" onclick="openModal()">What is this? ↗</button>
@@ -378,10 +404,40 @@
 
 </div>
 
+<!-- ── Functional Index ── -->
+<div class="section-label" style="margin-top:4px">Functional Purchasing Power Index &nbsp;·&nbsp; 30% blockspace | 30% market access | 30% depth | 10% collateral</div>
+<div class="grid3" style="margin-bottom:12px">
+  <div class="card accent-border">
+    <div class="clabel">Accepted Functional Index</div>
+    <div class="big" id="val-func-accepted">—</div>
+    <div class="cmeta" id="meta-func-accepted"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Live Spot (Functional)</div>
+    <div class="big" id="val-func-spot">—</div>
+    <div class="cmeta" id="meta-func-spot"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Health Overlay</div>
+    <div class="big" id="val-func-health">—</div>
+    <div class="cmeta" id="meta-func-health"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">Component Breakdown <span class="dim" style="text-transform:none;font-size:10px">(1.0x = no change from deploy)</span></div>
+  <table>
+    <thead>
+      <tr><th>Component</th><th>Weight</th><th>Value</th><th>Signal</th></tr>
+    </thead>
+    <tbody id="func-components-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+  </table>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
-  <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Index</button>
+  <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Native Index</button>
+  <button id="btn-func-update" class="primary" onclick="callFunctionalUpdate()" disabled>Call update() on Functional Oracle</button>
   <span id="msg"></span>
 </div>
 
@@ -404,6 +460,7 @@
 // ── Addresses ─────────────────────────────────────────────────────────────────
 const ADDR = {
   index:      '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
+  functional: '0xcd708104fDE8E759970e22B75E9aCe94f3ab8342',
   oracle:     '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
   controller: '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
   vault:      '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
@@ -450,15 +507,24 @@ const VAULT_ABI = [
   'function effectiveCeiling() view returns (uint256)',
   'function systemHealth() view returns (uint256)',
 ];
+const FUNC_ABI = [
+  'function peek() view returns (uint256 index, uint256 timestamp, uint256 healthBps)',
+  'function lastRawIndex() view returns (uint256)',
+  'function currentRawFunctionalIndex() view returns (uint256)',
+  'function isHealthy() view returns (bool)',
+  'function componentSnapshot() view returns (uint256 blockspaceComponent, uint256 marketAccessComponent, uint256 liquidityDepthComponent, uint256 collateralAccessComponent, uint256 healthBps)',
+  'function update() returns (uint256 rawIndex, uint256 acceptedIndex, uint256 healthBps)',
+];
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
 const prov = new ethers.providers.JsonRpcProvider(RPC);
-const indexC  = new ethers.Contract(ADDR.index,      INDEX_ABI,  prov);
-const oracleC = new ethers.Contract(ADDR.oracle,     ORACLE_ABI, prov);
-const ctrlC   = new ethers.Contract(ADDR.controller, CTRL_ABI,   prov);
-const vaultC  = new ethers.Contract(ADDR.vault,      VAULT_ABI,  prov);
+const indexC      = new ethers.Contract(ADDR.index,      INDEX_ABI,  prov);
+const functionalC = new ethers.Contract(ADDR.functional, FUNC_ABI,   prov);
+const oracleC     = new ethers.Contract(ADDR.oracle,     ORACLE_ABI, prov);
+const ctrlC       = new ethers.Contract(ADDR.controller, CTRL_ABI,   prov);
+const vaultC      = new ethers.Contract(ADDR.vault,      VAULT_ABI,  prov);
 
-let writeIndexC = null, signer = null, countdown = 30;
+let writeIndexC = null, writeFunctionalC = null, signer = null, countdown = 30;
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
@@ -485,6 +551,7 @@ async function refresh() {
     // Fetch everything in parallel
     const [
       idxPeek, rawIdx, spotIdx, idxHealthy, count, wplsW, gasW, lastGas, initGas,
+      funcPeek, funcSpot, funcHealthy, funcComponents,
       oraclePeek, oracleHealthy, creepState,
       R, r, lastEpoch, epochCount, epochDur, limHits, frozenEps, emergEps, deadbands,
       totalDebt, totalColl, surplus, badDebt, ceiling, sysHealth,
@@ -493,6 +560,8 @@ async function refresh() {
       indexC.isHealthy(), indexC.componentCount(),
       indexC.wplsWeightBps(), indexC.gasWeightBps(),
       indexC.lastGasPrice(), indexC.initialGasPrice(),
+      functionalC.peek(), functionalC.currentRawFunctionalIndex(),
+      functionalC.isHealthy(), functionalC.componentSnapshot(),
       oracleC.peek(), oracleC.isHealthy(), oracleC.getCreepingState(),
       ctrlC.R(), ctrlC.r(), ctrlC.lastEpochTime(), ctrlC.epochCount(),
       ctrlC.EPOCH_DURATION(), ctrlC.limiterHits(), ctrlC.frozenEpochs(),
@@ -629,6 +698,55 @@ async function refresh() {
       kv('Surplus buffer',  surplusN.toFixed(4) + ' SunPLS', surplusN > 0 ? 'up' : 'dim') +
       kv('Bad debt',        badDebtN.toFixed(4) + ' SunPLS', badDebtN > 0 ? 'down' : 'dim');
 
+    // ── Functional Index ──────────────────────────────────────────────────
+    const funcAccepted   = funcPeek.index;
+    const funcHealthBps  = +funcPeek.healthBps;
+
+    document.getElementById('val-func-accepted').textContent = f18(funcAccepted);
+    document.getElementById('val-func-accepted').className   = 'big ' + cls18(funcAccepted);
+    document.getElementById('meta-func-accepted').innerHTML  =
+      tag(funcHealthy ? '● Healthy' : '● Degraded', funcHealthy ? 'ok' : 'bad') +
+      `<span>Updated ${ago(funcPeek.timestamp)} ago</span>`;
+
+    const funcSpotN = +ethers.utils.formatUnits(funcSpot, 18);
+    const funcAccN  = +ethers.utils.formatUnits(funcAccepted, 18);
+    document.getElementById('val-func-spot').textContent = f18(funcSpot);
+    document.getElementById('val-func-spot').className   = 'big ' + cls18(funcSpot);
+    const funcUpd = funcSpotN !== funcAccN
+      ? Math.ceil(Math.abs(funcSpotN - funcAccN) / (funcAccN * 0.01)) : 0;
+    document.getElementById('meta-func-spot').innerHTML =
+      funcUpd > 0 ? tag(`~${funcUpd} update${funcUpd>1?'s':''} to close`, 'warn')
+                  : tag('Accepted is current', 'ok');
+
+    const healthCls2 = funcHealthBps >= 10000 ? 'up' : funcHealthBps >= 7000 ? 'warn' : 'down';
+    document.getElementById('val-func-health').textContent = (funcHealthBps / 100).toFixed(0) + '%';
+    document.getElementById('val-func-health').className   = 'big ' + healthCls2;
+    document.getElementById('meta-func-health').innerHTML  =
+      tag(funcHealthBps >= 10000 ? 'Full influence' : funcHealthBps >= 7000 ? 'Reduced' : 'Frozen',
+          funcHealthBps >= 10000 ? 'ok' : funcHealthBps >= 7000 ? 'warn' : 'bad');
+
+    const compNames   = ['Blockspace Access', 'Market Access', 'Liquidity Depth', 'Collateral Access'];
+    const compWeights = ['30%', '30%', '30%', '10%'];
+    const compVals    = [
+      funcComponents.blockspaceComponent,
+      funcComponents.marketAccessComponent,
+      funcComponents.liquidityDepthComponent,
+      funcComponents.collateralAccessComponent,
+    ];
+    const funcTbody = document.getElementById('func-components-body');
+    funcTbody.innerHTML = '';
+    for (let i = 0; i < compNames.length; i++) {
+      const n   = +ethers.utils.formatUnits(compVals[i], 18);
+      const pct = (n - 1) * 100;
+      const cls = pct > 0.05 ? 'up' : pct < -0.05 ? 'down' : 'dim';
+      const sig = n > 1.005 ? 'Rising ↑' : n < 0.995 ? 'Falling ↓' : 'Stable';
+      const tr  = document.createElement('tr');
+      tr.innerHTML = `<td><b>${compNames[i]}</b></td><td class="dim">${compWeights[i]}</td>`
+        + `<td class="${cls}">${n.toFixed(4)}x</td>`
+        + `<td class="${cls}">${sig} <span style="opacity:.6">(${pct>=0?'+':''}${pct.toFixed(3)}%)</span></td>`;
+      funcTbody.appendChild(tr);
+    }
+
   } catch(e) {
     console.error(e);
     document.getElementById('footer').textContent = 'Error: ' + e.message;
@@ -663,10 +781,12 @@ async function connectWallet() {
     catch { alert('Switch to PulseChain (chain ID 369)'); return; }
   }
   signer = wp.getSigner();
-  writeIndexC = new ethers.Contract(ADDR.index, INDEX_ABI, signer);
+  writeIndexC      = new ethers.Contract(ADDR.index,      INDEX_ABI, signer);
+  writeFunctionalC = new ethers.Contract(ADDR.functional, FUNC_ABI,  signer);
   const addr = await signer.getAddress();
   document.getElementById('btn-connect').textContent = addr.slice(0,6)+'…'+addr.slice(-4);
-  document.getElementById('btn-update').disabled = false;
+  document.getElementById('btn-update').disabled      = false;
+  document.getElementById('btn-func-update').disabled = false;
 }
 
 async function callUpdate() {
@@ -694,6 +814,21 @@ async function callUpdate() {
       P:        fWPLS(oraclePeek.price),
     });
     saveHist(hist); renderHist(); await refresh();
+  } catch(e) {
+    msg.textContent = 'Error: ' + (e.reason || e.message || e);
+  } finally { btn.disabled = false; }
+}
+
+async function callFunctionalUpdate() {
+  if (!writeFunctionalC) return;
+  const btn = document.getElementById('btn-func-update'), msg = document.getElementById('msg');
+  btn.disabled = true; msg.textContent = 'Sending…';
+  try {
+    const tx = await writeFunctionalC.update();
+    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
+    const receipt = await tx.wait();
+    msg.textContent = '✓ Block ' + receipt.blockNumber;
+    await refresh();
   } catch(e) {
     msg.textContent = 'Error: ' + (e.reason || e.message || e);
   } finally { btn.disabled = false; }
