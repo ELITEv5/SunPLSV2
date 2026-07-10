@@ -50,6 +50,8 @@
     .big.up   { color: var(--green); }
     .big.down { color: var(--red); }
     .big.neutral { color: var(--text); }
+    .big.warn { color: var(--yellow); }
+    .big.accent { color: var(--accent); }
     .cmeta { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
     .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; }
@@ -58,6 +60,7 @@
     .tag.warn{ background: rgba(245,158,11,.1); color: var(--yellow); border: 1px solid rgba(245,158,11,.25); }
     .tag.info{ background: rgba(96,165,250,.1); color: var(--blue);   border: 1px solid rgba(96,165,250,.25); }
     .tag.p   { background: rgba(167,139,250,.1);color: var(--accent); border: 1px solid rgba(167,139,250,.25); }
+    .tag.n   { background: rgba(90,90,114,.15); color: var(--muted); border: 1px solid rgba(90,90,114,.3); }
 
     .kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(37,37,53,.7); font-size: 13px; }
     .kv:last-child { border-bottom: none; }
@@ -480,6 +483,28 @@
   </table>
 </div>
 
+<!-- ── Core Access Regime (analytics only) ── -->
+<div class="section-label" style="margin-top:4px">Core Access Regime &nbsp;·&nbsp; <span style="color:var(--muted)">Native × Functional v3, analytics only</span></div>
+<div class="card accent-border" style="margin-bottom:12px">
+  <div class="clabel">Regime</div>
+  <div class="big" id="val-regime">—</div>
+  <div class="cmeta" id="meta-regime"></div>
+  <div id="regime-matched" style="font-size:11px;margin-top:8px"></div>
+  <div id="regime-inputs" style="margin-top:12px"></div>
+  <div class="footer" style="margin-top:12px;margin-bottom:0">
+    Analytics only. Not financial advice. Does not affect SunPLS monetary policy.
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">Regime History <span class="dim" style="text-transform:none;font-size:10px">(logged on each label change, last 12 shown)</span></div>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Regime</th><th>Reason</th><th>Inputs at transition</th></tr>
+    </thead>
+    <tbody id="regime-hist-body"><tr><td colspan="4" class="dim">No transitions recorded yet.</td></tr></tbody>
+  </table>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
@@ -583,6 +608,132 @@ const vaultC        = new ethers.Contract(ADDR.vault,        VAULT_ABI,    prov)
 
 let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null,
     signer = null, countdown = 30;
+
+// ── Core Access Regime (analytics only — never touches R, controller, or contract calls) ──
+const REGIME_THRESHOLDS = {
+  nativeStrong:          1.02,
+  nativeConstructive:    1.01,
+  nativeWeak:            0.99,
+  functionalCheap:       1.00,
+  functionalNeutralHigh: 1.01,
+  functionalExpensive:   1.03,
+};
+// Number of consecutive refresh ticks a new label must persist before the
+// displayed regime switches (debounces flicker near a threshold boundary).
+// Health-degraded states always bypass this and show immediately.
+const REGIME_CONFIRM_TICKS = 2;
+
+// Pure classifier — same inputs always produce the same output, no I/O, no state.
+function classifyCoreAccessRegime({
+  nativeAccepted, functionalAccepted, functionalLive, healthBps,
+  isStale, isHealthy, blockspace, marketAccess, liquidityDepth,
+}) {
+  const t = REGIME_THRESHOLDS;
+  const frozen  = isStale || isHealthy === false || (healthBps != null && healthBps < 7000);
+  const reduced = !frozen && healthBps != null && healthBps < 10000;
+  const healthPctStr = healthBps != null ? (healthBps / 100).toFixed(0) + '%' : 'n/a';
+
+  if (frozen) {
+    return {
+      label: 'Caution', tone: 'danger',
+      reason: 'Signal frozen or stale',
+      matchedRule: `stale/unhealthy or health < 70% (health=${healthPctStr})`,
+    };
+  }
+  if (reduced) {
+    return {
+      label: 'Caution', tone: 'warning',
+      reason: 'Signal health reduced',
+      matchedRule: `health < 100% (health=${healthPctStr})`,
+    };
+  }
+  if (nativeAccepted > t.nativeStrong && functionalAccepted < t.functionalCheap) {
+    return {
+      label: 'Buy / Favorable Access', tone: 'positive',
+      reason: 'Native strength with below-baseline functional access',
+      matchedRule: `native > ${t.nativeStrong}x AND functional < ${t.functionalCheap}x`,
+    };
+  }
+  if (nativeAccepted > t.nativeConstructive && functionalAccepted >= t.functionalCheap && functionalAccepted < t.functionalNeutralHigh) {
+    return {
+      label: 'Hold / Constructive', tone: 'neutral-positive',
+      reason: 'Native strength with near-neutral access',
+      matchedRule: `native > ${t.nativeConstructive}x AND ${t.functionalCheap}x ≤ functional < ${t.functionalNeutralHigh}x`,
+    };
+  }
+  if (functionalAccepted > t.functionalExpensive) {
+    return {
+      label: 'Caution', tone: 'warning',
+      reason: 'Functional access is becoming expensive',
+      matchedRule: `functional > ${t.functionalExpensive}x`,
+    };
+  }
+  if (nativeAccepted < t.nativeWeak && functionalAccepted > t.functionalNeutralHigh) {
+    return {
+      label: 'Caution', tone: 'warning',
+      reason: 'Weak native basket with expensive functional access',
+      matchedRule: `native < ${t.nativeWeak}x AND functional > ${t.functionalNeutralHigh}x`,
+    };
+  }
+  return {
+    label: 'Hold / Neutral', tone: 'neutral',
+    reason: 'No strong regime signal',
+    matchedRule: 'no threshold condition matched',
+  };
+}
+
+// ── Regime display debouncing + transition history (UI concern, kept separate from the pure classifier) ──
+const REGIME_HIST_KEY = 'sunpls_regime_hist_v1';
+let regimeDisplayed = null, regimePending = null, regimePendingCount = 0;
+let regimeHist = (() => { try { return JSON.parse(localStorage.getItem(REGIME_HIST_KEY) || '[]'); } catch { return []; } })();
+
+function resolveDisplayedRegime(raw) {
+  if (raw.tone === 'danger' || !regimeDisplayed || raw.label === regimeDisplayed.label) {
+    regimePending = null; regimePendingCount = 0;
+    regimeDisplayed = raw;
+    return raw;
+  }
+  if (regimePending && regimePending.label === raw.label) {
+    regimePendingCount++;
+  } else {
+    regimePending = raw; regimePendingCount = 1;
+  }
+  if (regimePendingCount >= REGIME_CONFIRM_TICKS) {
+    regimePending = null; regimePendingCount = 0;
+    regimeDisplayed = raw;
+    return raw;
+  }
+  return regimeDisplayed; // not yet confirmed — keep showing the previous label
+}
+
+function recordRegimeTransition(regime, nativeAccepted, functionalAccepted) {
+  const last = regimeHist[regimeHist.length - 1];
+  if (last && last.label === regime.label) return;
+  regimeHist.push({
+    time: Date.now(), label: regime.label, tone: regime.tone,
+    reason: regime.reason, matchedRule: regime.matchedRule,
+    native: nativeAccepted.toFixed(4), functional: functionalAccepted.toFixed(4),
+  });
+  regimeHist = regimeHist.slice(-50);
+  localStorage.setItem(REGIME_HIST_KEY, JSON.stringify(regimeHist));
+  renderRegimeHist();
+}
+
+function renderRegimeHist() {
+  const el = document.getElementById('regime-hist-body');
+  if (!el) return;
+  if (!regimeHist.length) { el.innerHTML = '<tr><td colspan="4" class="dim">No transitions recorded yet.</td></tr>'; return; }
+  el.innerHTML = '';
+  for (const e of [...regimeHist].reverse().slice(0, 12)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="dim">${new Date(e.time).toLocaleString()}</td>` +
+      `<td>${e.label}</td>` +
+      `<td class="dim">${e.reason}</td>` +
+      `<td class="dim">native ${e.native}x / func ${e.functional}x</td>`;
+    el.appendChild(tr);
+  }
+}
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
@@ -905,6 +1056,47 @@ async function refresh() {
             `</span>` +
           `</td>`;
       }
+
+      // ── Core Access Regime (analytics only) ──────────────────────────────
+      const regimeInputs = {
+        nativeAccepted:     accN,
+        functionalAccepted: emaAccN,
+        functionalLive:     emaSpotN,
+        healthBps:          emaHealthBps,
+        isStale:            emaAgeS > 7200,
+        isHealthy:          emaHealthy,
+        blockspace:         +ethers.utils.formatUnits(emaComponents.blockspaceComponent, 18),
+        marketAccess:       +ethers.utils.formatUnits(emaComponents.marketAccessComponent, 18),
+        liquidityDepth:     +ethers.utils.formatUnits(emaComponents.liquidityDepthComponent, 18),
+      };
+      const rawRegime = classifyCoreAccessRegime(regimeInputs);
+      const regime    = resolveDisplayedRegime(rawRegime); // debounced for display
+      recordRegimeTransition(regime, regimeInputs.nativeAccepted, regimeInputs.functionalAccepted);
+
+      const regimeBigCls = {
+        positive: 'up', 'neutral-positive': 'accent', warning: 'warn', danger: 'down', neutral: 'neutral',
+      }[regime.tone] || 'neutral';
+      const regimeTagCls = {
+        positive: 'ok', 'neutral-positive': 'p', warning: 'warn', danger: 'bad', neutral: 'n',
+      }[regime.tone] || 'n';
+
+      document.getElementById('val-regime').textContent = regime.label;
+      document.getElementById('val-regime').className   = 'big ' + regimeBigCls;
+      document.getElementById('meta-regime').innerHTML  =
+        tag(regime.reason, regimeTagCls) +
+        (regime !== rawRegime ? tag(`confirming ${regimePendingCount}/${REGIME_CONFIRM_TICKS}…`, 'n') : '');
+      document.getElementById('regime-matched').innerHTML =
+        `<span class="dim" title="${regime.matchedRule}">Matched rule: ${regime.matchedRule}</span>`;
+
+      document.getElementById('regime-inputs').innerHTML =
+        kv('Native accepted index',        f18(accepted)) +
+        kv('Functional v3 accepted index', f18(emaAccepted)) +
+        kv('Functional v3 live spot',      f18(emaSpot)) +
+        kv('Health overlay',               (emaHealthBps/100).toFixed(0) + '%', emaHealthCls) +
+        kv('Market access component',      regimeInputs.marketAccess.toFixed(4) + 'x') +
+        kv('Liquidity depth component',    regimeInputs.liquidityDepth.toFixed(4) + 'x') +
+        kv('EMA blockspace component',     regimeInputs.blockspace.toFixed(4) + 'x');
+      renderRegimeHist();
     }
 
   } catch(e) {
@@ -1023,7 +1215,7 @@ function tick() {
     'Last refreshed: ' + new Date().toLocaleTimeString() + '  ·  Next in ' + countdown + 's';
 }
 
-refresh(); renderHist(); setInterval(tick, 1000);
+refresh(); renderHist(); renderRegimeHist(); setInterval(tick, 1000);
 
 function openModal()  { document.getElementById('modal-overlay').classList.add('open');    document.body.style.overflow='hidden'; }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); document.body.style.overflow=''; }
