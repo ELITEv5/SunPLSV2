@@ -539,6 +539,18 @@
   </div>
 </div>
 
+<!-- ── Observation Log — the learning dataset ── -->
+<div class="section-label" style="margin-top:4px">Observation Log &nbsp;·&nbsp; <span style="color:var(--muted)">one row per your update() call — the dataset for judging whether this signal actually works</span></div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px" id="obs-log-summary">Loading…</div>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Regime</th><th>Native</th><th>Functional v3</th><th>Health</th><th>PLS/USD</th></tr>
+    </thead>
+    <tbody id="obs-log-body"><tr><td colspan="6" class="dim">Loading…</td></tr></tbody>
+  </table>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
@@ -664,7 +676,18 @@ const REGIME_THRESHOLDS = {
 // Health-degraded states always bypass this and show immediately.
 const REGIME_CONFIRM_TICKS = 2;
 
+// Oracles are advanced by manual update() calls (~1-3x/day), not a keeper — see keeper.sh,
+// which never touches these two contracts. A multi-hour gap between updates is normal,
+// not a fault, so staleness must not force a sell on its own. Two tiers:
+//  - AGING:  informational only ("your data is getting old, consider updating") — never trades.
+//  - HARD:   data is old enough that we no longer trust it — forces Caution like a real health fault.
+const STALE_AGING_SECONDS = 16 * 3600;   // ~16h — longer than a typical daily gap, just a nudge
+const STALE_HARD_SECONDS  = 72 * 3600;   // 3 days — well beyond "busy day," treat as abandoned/stale
+
 // Pure classifier — same inputs always produce the same output, no I/O, no state.
+// `isStale` here means "hard stale" (STALE_HARD_SECONDS+) — ordinary gaps between manual
+// updates should NOT be passed in as isStale; use `isAging` (computed by the caller) for
+// the softer, non-trading "data is getting old" indicator instead.
 function classifyCoreAccessRegime({
   nativeAccepted, functionalAccepted, functionalLive, healthBps,
   isStale, isHealthy, blockspace, marketAccess, liquidityDepth,
@@ -678,7 +701,7 @@ function classifyCoreAccessRegime({
     return {
       label: 'Caution', tone: 'danger',
       reason: 'Signal frozen or stale',
-      matchedRule: `stale/unhealthy or health < 70% (health=${healthPctStr})`,
+      matchedRule: `no update() in 3+ days, or unhealthy (health=${healthPctStr})`,
     };
   }
   if (reduced) {
@@ -871,6 +894,58 @@ function renderMockWallet(w, priceUsd) {
       `<td class="dim">${t.regime}</td>` +
       `<td>$${t.valueUsd.toFixed(2)}</td>`;
     tbody.appendChild(tr);
+  }
+}
+
+// ── Observation log — the actual "learning dataset" ──────────────────────────
+// One row per real on-chain update() call (detected via a change in either oracle's
+// stored timestamp), NOT per 30s UI poll — with manual updates ~1-3x/day this stays a
+// clean, meaningful time series instead of thousands of duplicate 30s snapshots. This is
+// the record to look back on later to judge whether the regime signal actually tracks
+// anything real.
+const OBS_LOG_KEY   = 'sunpls_obs_log_v1';
+const OBS_LOG_LIMIT = 2000; // ~2-5 years at 1-3 updates/day
+let obsLog = (() => { try { return JSON.parse(localStorage.getItem(OBS_LOG_KEY) || '[]'); } catch { return []; } })();
+
+function recordObservation(nativeTs, functionalTs, snap) {
+  const last = obsLog[obsLog.length - 1];
+  if (last && last.nativeTs === nativeTs && last.functionalTs === functionalTs) return; // no new update() since last observation
+  obsLog.push({ time: Date.now(), nativeTs, functionalTs, ...snap });
+  obsLog = obsLog.slice(-OBS_LOG_LIMIT);
+  localStorage.setItem(OBS_LOG_KEY, JSON.stringify(obsLog));
+  renderObsLog();
+}
+
+function renderObsLog() {
+  const summaryEl = document.getElementById('obs-log-summary');
+  const bodyEl    = document.getElementById('obs-log-body');
+  if (!summaryEl || !bodyEl) return;
+
+  if (!obsLog.length) {
+    summaryEl.textContent = 'No observations logged yet — one is recorded each time you call update() on the Native or Functional EMA oracle.';
+    bodyEl.innerHTML = '<tr><td colspan="6" class="dim">No observations yet.</td></tr>';
+    return;
+  }
+
+  const counts = {};
+  for (const o of obsLog) counts[o.regimeLabel] = (counts[o.regimeLabel] || 0) + 1;
+  const countsStr = Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join('  ·  ');
+  const first = obsLog[0], lastObs = obsLog[obsLog.length - 1];
+  summaryEl.innerHTML =
+    `${obsLog.length} observation${obsLog.length>1?'s':''} spanning ` +
+    `${new Date(first.time).toLocaleDateString()} → ${new Date(lastObs.time).toLocaleDateString()} &nbsp;·&nbsp; ${countsStr}`;
+
+  bodyEl.innerHTML = '';
+  for (const o of [...obsLog].reverse().slice(0, 20)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="dim">${new Date(o.time).toLocaleString()}</td>` +
+      `<td>${o.regimeLabel}</td>` +
+      `<td class="dim">${o.nativeAccepted.toFixed(4)}x</td>` +
+      `<td class="dim">${o.functionalAccepted.toFixed(4)}x</td>` +
+      `<td class="dim">${(o.healthBps/100).toFixed(0)}%</td>` +
+      `<td class="dim">$${o.plsPriceUsd.toFixed(8)}</td>`;
+    bodyEl.appendChild(tr);
   }
 }
 
@@ -1088,7 +1163,7 @@ async function refresh() {
     if (!noDebt && +sysHealth < 12000)  health2Reasons.push('CR critical (<120%)');
     else if (!noDebt && +sysHealth < 15000) health2Reasons.push('CR degraded (<150%)');
     const func2AgeS = Math.floor(Date.now() / 1000) - +func2Peek.timestamp;
-    if (func2AgeS > 7200)               health2Reasons.push('Index stale (>2h)');
+    if (func2AgeS > STALE_AGING_SECONDS) health2Reasons.push(`Awaiting update (${(func2AgeS/3600).toFixed(1)}h since last)`);
 
     const health2Label   = func2HealthBps >= 10000 ? 'Full influence' : func2HealthBps >= 7000 ? 'Reduced' : 'Frozen';
     const health2TagType = func2HealthBps >= 10000 ? 'ok' : func2HealthBps >= 7000 ? 'warn' : 'bad';
@@ -1148,7 +1223,7 @@ async function refresh() {
       if (!noDebt && +sysHealth < 12000) emaHealthReasons.push('CR critical (<120%)');
       else if (!noDebt && +sysHealth < 15000) emaHealthReasons.push('CR degraded (<150%)');
       const emaAgeS = Math.floor(Date.now() / 1000) - +emaPeek.timestamp;
-      if (emaAgeS > 7200)                emaHealthReasons.push('Index stale (>2h)');
+      if (emaAgeS > STALE_AGING_SECONDS) emaHealthReasons.push(`Awaiting update (${(emaAgeS/3600).toFixed(1)}h since last)`);
 
       const emaHealthLabel   = emaHealthBps >= 10000 ? 'Full influence' : emaHealthBps >= 7000 ? 'Reduced' : 'Frozen';
       const emaHealthTagType = emaHealthBps >= 10000 ? 'ok' : emaHealthBps >= 7000 ? 'warn' : 'bad';
@@ -1203,12 +1278,16 @@ async function refresh() {
       }
 
       // ── Core Access Regime (analytics only) ──────────────────────────────
+      // isStale = HARD stale (3+ days, no update() at all) — forces Caution, same as a real
+      // health fault. isAging = informational only (updates are manual, ~1-3x/day expected;
+      // a several-hour gap is normal and must never by itself trigger a simulated sell).
+      const isAging = emaAgeS > STALE_AGING_SECONDS;
       const regimeInputs = {
         nativeAccepted:     accN,
         functionalAccepted: emaAccN,
         functionalLive:     emaSpotN,
         healthBps:          emaHealthBps,
-        isStale:            emaAgeS > 7200,
+        isStale:            emaAgeS > STALE_HARD_SECONDS,
         isHealthy:          emaHealthy,
         blockspace:         +ethers.utils.formatUnits(emaComponents.blockspaceComponent, 18),
         marketAccess:       +ethers.utils.formatUnits(emaComponents.marketAccessComponent, 18),
@@ -1229,7 +1308,8 @@ async function refresh() {
       document.getElementById('val-regime').className   = 'big ' + regimeBigCls;
       document.getElementById('meta-regime').innerHTML  =
         tag(regime.reason, regimeTagCls) +
-        (regime !== rawRegime ? tag(`confirming ${regimePendingCount}/${REGIME_CONFIRM_TICKS}…`, 'n') : '');
+        (regime !== rawRegime ? tag(`confirming ${regimePendingCount}/${REGIME_CONFIRM_TICKS}…`, 'n') : '') +
+        (isAging && !regimeInputs.isStale ? tag(`Data age ${(emaAgeS/3600).toFixed(1)}h — awaiting your next update()`, 'n') : '');
       document.getElementById('regime-matched').innerHTML =
         `<span class="dim" title="${regime.matchedRule}">Matched rule: ${regime.matchedRule}</span>`;
 
@@ -1249,6 +1329,17 @@ async function refresh() {
       mockWallet = applyMockWalletTick(mockWallet, regime.label, plsPriceUsd);
       saveMockWallet(mockWallet);
       renderMockWallet(mockWallet, plsPriceUsd);
+
+      // ── Observation log — one row per real update(), the actual learning dataset ──
+      recordObservation(+idxPeek.timestamp, +emaPeek.timestamp, {
+        regimeLabel:        regime.label,
+        regimeReason:       regime.reason,
+        matchedRule:        regime.matchedRule,
+        nativeAccepted:     regimeInputs.nativeAccepted,
+        functionalAccepted: regimeInputs.functionalAccepted,
+        healthBps:          regimeInputs.healthBps,
+        plsPriceUsd,
+      });
     }
 
   } catch(e) {
@@ -1367,7 +1458,7 @@ function tick() {
     'Last refreshed: ' + new Date().toLocaleTimeString() + '  ·  Next in ' + countdown + 's';
 }
 
-refresh(); renderHist(); renderRegimeHist(); setInterval(tick, 1000);
+refresh(); renderHist(); renderRegimeHist(); renderObsLog(); setInterval(tick, 1000);
 
 function openModal()  { document.getElementById('modal-overlay').classList.add('open');    document.body.style.overflow='hidden'; }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); document.body.style.overflow=''; }
