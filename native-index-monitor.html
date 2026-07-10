@@ -525,7 +525,7 @@
   </div>
 </div>
 <div class="card" style="margin-bottom:12px">
-  <div class="clabel" style="margin-bottom:10px">Simulated Trades <span class="dim" style="text-transform:none;font-size:10px">(0.30% simulated fee/slippage per trade, triggered by confirmed regime changes)</span></div>
+  <div class="clabel" style="margin-bottom:10px">Simulated Trades <span class="dim" style="text-transform:none;font-size:10px">(0.30% simulated fee/slippage per trade; buys only on confirmed Buy/Favorable Access, sells only on genuine Caution — never on staleness alone; requires 2 confirmed update() events + 24h min hold)</span></div>
   <table>
     <thead>
       <tr><th>Time</th><th>Action</th><th>PLS Price</th><th>Triggered by</th><th>Value After</th></tr>
@@ -688,26 +688,35 @@ const STALE_HARD_SECONDS  = 72 * 3600;   // 3 days — well beyond "busy day," t
 // `isStale` here means "hard stale" (STALE_HARD_SECONDS+) — ordinary gaps between manual
 // updates should NOT be passed in as isStale; use `isAging` (computed by the caller) for
 // the softer, non-trading "data is getting old" indicator instead.
+// `category` distinguishes *why* a label fired — the display treats all Caution alike,
+// but the mock wallet (below) treats them very differently: staleness alone is not
+// treated the same as a genuine health fault or an expensive/weak-access threshold.
 function classifyCoreAccessRegime({
   nativeAccepted, functionalAccepted, functionalLive, healthBps,
   isStale, isHealthy, blockspace, marketAccess, liquidityDepth,
 }) {
   const t = REGIME_THRESHOLDS;
-  const frozen  = isStale || isHealthy === false || (healthBps != null && healthBps < 7000);
-  const reduced = !frozen && healthBps != null && healthBps < 10000;
+  const unhealthy = isHealthy === false || (healthBps != null && healthBps < 7000);
+  const frozen    = isStale || unhealthy;
+  const reduced   = !frozen && healthBps != null && healthBps < 10000;
   const healthPctStr = healthBps != null ? (healthBps / 100).toFixed(0) + '%' : 'n/a';
 
   if (frozen) {
+    const staleOnly = isStale && !unhealthy;
     return {
       label: 'Caution', tone: 'danger',
-      reason: 'Signal frozen or stale',
-      matchedRule: `no update() in 3+ days, or unhealthy (health=${healthPctStr})`,
+      reason: staleOnly ? 'Signal stale — awaiting update' : 'Signal unhealthy',
+      category: staleOnly ? 'stale' : 'unhealthy',
+      matchedRule: staleOnly
+        ? 'no update() in 3+ days'
+        : `unhealthy (health=${healthPctStr}${isHealthy === false ? ', isHealthy=false' : ''})`,
     };
   }
   if (reduced) {
     return {
       label: 'Caution', tone: 'warning',
       reason: 'Signal health reduced',
+      category: 'reduced-health',
       matchedRule: `health < 100% (health=${healthPctStr})`,
     };
   }
@@ -715,6 +724,7 @@ function classifyCoreAccessRegime({
     return {
       label: 'Buy / Favorable Access', tone: 'positive',
       reason: 'Native strength with below-baseline functional access',
+      category: 'buy',
       matchedRule: `native > ${t.nativeStrong}x AND functional < ${t.functionalCheap}x`,
     };
   }
@@ -722,6 +732,7 @@ function classifyCoreAccessRegime({
     return {
       label: 'Hold / Constructive', tone: 'neutral-positive',
       reason: 'Native strength with near-neutral access',
+      category: 'hold-constructive',
       matchedRule: `native > ${t.nativeConstructive}x AND ${t.functionalCheap}x ≤ functional < ${t.functionalNeutralHigh}x`,
     };
   }
@@ -729,6 +740,7 @@ function classifyCoreAccessRegime({
     return {
       label: 'Caution', tone: 'warning',
       reason: 'Functional access is becoming expensive',
+      category: 'expensive-function',
       matchedRule: `functional > ${t.functionalExpensive}x`,
     };
   }
@@ -736,12 +748,14 @@ function classifyCoreAccessRegime({
     return {
       label: 'Caution', tone: 'warning',
       reason: 'Weak native basket with expensive functional access',
+      category: 'weak-native-expensive-access',
       matchedRule: `native < ${t.nativeWeak}x AND functional > ${t.functionalNeutralHigh}x`,
     };
   }
   return {
     label: 'Hold / Neutral', tone: 'neutral',
     reason: 'No strong regime signal',
+    category: 'neutral',
     matchedRule: 'no threshold condition matched',
   };
 }
@@ -801,15 +815,37 @@ function renderRegimeHist() {
 
 // ── Mock Wallet — regime backtest (pure simulation: no real funds, no on-chain trades) ──
 // Trades a simulated $1,000 between PLS and cash based on the *confirmed* Core Access
-// Regime label, and compares the result to a naive buy-and-hold-PLS baseline. Priced
+// Regime category, and compares the result to a naive buy-and-hold-PLS baseline. Priced
 // against the on-chain PulseX V1 WPLS/DAI pair (ADDR.wplsDaiPair) — same "chain prices
 // itself" philosophy as the rest of this page, no external APIs.
+//
+// Deliberately slower and narrower than the display panel:
+//  - Buys ONLY on category 'buy' (confirmed Buy / Favorable Access).
+//  - Sells ONLY on a *genuine* Caution: expensive function, weak-native/expensive-access,
+//    or a real health fault ('unhealthy' / 'reduced-health') — never on staleness alone.
+//  - A 'stale' reading holds the current position; the wallet only treats staleness as a
+//    sell signal once it's persisted well beyond the display's own 3-day threshold
+//    (MOCK_WALLET_STALE_SELL_SECONDS), i.e. genuinely unmaintained, not just "haven't
+//    updated today."
+//  - Any switch requires MOCK_CONFIRM_UPDATES consecutive *real* update() events agreeing
+//    on the new direction (not 30s UI polls — see isNewUpdateEvent) AND at least
+//    MOCK_MIN_HOLD_HOURS since the last simulated trade. Both gates must clear.
 const MOCK_WALLET_KEY    = 'sunpls_mockwallet_v1';
 const MOCK_START_USD     = 1000;
-const MOCK_TRADE_FEE_BPS = 30; // 0.30% simulated PulseX swap fee/slippage per trade
+const MOCK_TRADE_FEE_BPS = 30;  // 0.30% simulated PulseX swap fee/slippage per trade
+const MOCK_MIN_HOLD_HOURS = 24; // minimum time between simulated trades
+const MOCK_CONFIRM_UPDATES = 2; // consecutive real update() events required to confirm a switch
+const MOCK_WALLET_STALE_SELL_SECONDS = 7 * 24 * 3600; // exit on staleness alone only after 7+ days unmaintained
 
 function loadMockWallet() {
-  try { return JSON.parse(localStorage.getItem(MOCK_WALLET_KEY)); } catch { return null; }
+  let w;
+  try { w = JSON.parse(localStorage.getItem(MOCK_WALLET_KEY)); } catch { return null; }
+  if (w) {
+    if (w.pendingDirection === undefined) w.pendingDirection = null;
+    if (w.pendingConfirms  === undefined) w.pendingConfirms  = 0;
+    if (w.lastTradeTime    === undefined) w.lastTradeTime    = w.startTime || Date.now();
+  }
+  return w;
 }
 function saveMockWallet(w) { localStorage.setItem(MOCK_WALLET_KEY, JSON.stringify(w)); }
 
@@ -821,30 +857,55 @@ function initMockWallet(priceUsd) {
     plsUnits: MOCK_START_USD / priceUsd,
     cashUsd: 0,
     inPls: true,
+    lastTradeTime: Date.now(),
+    pendingDirection: null,
+    pendingConfirms: 0,
     trades: [{ time: Date.now(), action: 'BUY', priceUsd, regime: 'Initial position', valueUsd: MOCK_START_USD }],
   };
 }
 
-// wantPls: Buy/Favorable Access -> long PLS; Caution -> exit to cash; Hold* -> keep current position.
-function applyMockWalletTick(w, regimeLabel, priceUsd) {
-  const wantPls = regimeLabel === 'Buy / Favorable Access' ? true
-                : regimeLabel === 'Caution'                ? false
-                : w.inPls;
-  if (wantPls !== w.inPls) {
-    if (wantPls) {
-      w.plsUnits = (w.cashUsd * (1 - MOCK_TRADE_FEE_BPS / 10000)) / priceUsd;
-      w.cashUsd  = 0;
-    } else {
-      w.cashUsd  = (w.plsUnits * priceUsd) * (1 - MOCK_TRADE_FEE_BPS / 10000);
-      w.plsUnits = 0;
-    }
-    w.inPls = wantPls;
-    w.trades.push({
-      time: Date.now(), action: wantPls ? 'BUY' : 'SELL', priceUsd, regime: regimeLabel,
-      valueUsd: wantPls ? w.plsUnits * priceUsd : w.cashUsd,
-    });
-    w.trades = w.trades.slice(-50);
+// Returns true (want PLS), false (want cash), or null (no opinion — hold current position).
+function desiredWalletPosition(category, emaAgeS) {
+  if (category === 'buy') return true;
+  if (category === 'expensive-function' || category === 'weak-native-expensive-access' ||
+      category === 'unhealthy' || category === 'reduced-health') return false;
+  if (category === 'stale') return emaAgeS > MOCK_WALLET_STALE_SELL_SECONDS ? false : null;
+  return null; // hold-constructive, neutral — keep current position
+}
+
+// isNewUpdateEvent: true only when a real on-chain update() has landed since the last tick
+// (see isNewOracleUpdate) — confirmation only progresses on real updates, never on a 30s poll.
+function applyMockWalletTick(w, category, regimeLabel, emaAgeS, priceUsd, isNewUpdateEvent) {
+  const desired = desiredWalletPosition(category, emaAgeS);
+
+  if (desired === null || desired === w.inPls) {
+    w.pendingDirection = null; w.pendingConfirms = 0;
+    return w;
   }
+  if (!isNewUpdateEvent) return w; // don't progress confirmation on UI-poll-only ticks
+
+  if (w.pendingDirection === desired) w.pendingConfirms++;
+  else { w.pendingDirection = desired; w.pendingConfirms = 1; }
+
+  const hoursSinceLastTrade = (Date.now() - w.lastTradeTime) / 3600000;
+  if (w.pendingConfirms < MOCK_CONFIRM_UPDATES || hoursSinceLastTrade < MOCK_MIN_HOLD_HOURS) return w;
+
+  // Both gates cleared — execute the simulated trade.
+  if (desired) {
+    w.plsUnits = (w.cashUsd * (1 - MOCK_TRADE_FEE_BPS / 10000)) / priceUsd;
+    w.cashUsd  = 0;
+  } else {
+    w.cashUsd  = (w.plsUnits * priceUsd) * (1 - MOCK_TRADE_FEE_BPS / 10000);
+    w.plsUnits = 0;
+  }
+  w.inPls = desired;
+  w.lastTradeTime = Date.now();
+  w.trades.push({
+    time: Date.now(), action: desired ? 'BUY' : 'SELL', priceUsd, regime: regimeLabel,
+    valueUsd: desired ? w.plsUnits * priceUsd : w.cashUsd,
+  });
+  w.trades = w.trades.slice(-50);
+  w.pendingDirection = null; w.pendingConfirms = 0;
   return w;
 }
 
@@ -862,11 +923,21 @@ function renderMockWallet(w, priceUsd) {
   const alpha      = stratValue - baseValue;
   const alphaPct   = (stratValue / baseValue - 1) * 100;
 
+  const hoursSinceLastTrade = (Date.now() - w.lastTradeTime) / 3600000;
+  const holdRemainingH      = MOCK_MIN_HOLD_HOURS - hoursSinceLastTrade;
+  const pendingTag = w.pendingDirection !== null
+    ? tag(`Pending ${w.pendingDirection ? 'BUY' : 'SELL'}: ${w.pendingConfirms}/${MOCK_CONFIRM_UPDATES} updates confirmed`, 'n')
+    : '';
+  const holdTag = holdRemainingH > 0
+    ? tag(`Min hold: ${holdRemainingH.toFixed(1)}h remaining`, 'n')
+    : '';
+
   document.getElementById('val-mock-strategy').textContent = '$' + stratValue.toFixed(2);
   document.getElementById('val-mock-strategy').className   = 'big ' + (stratPct >= 0 ? 'up' : 'down');
   document.getElementById('meta-mock-strategy').innerHTML  =
     tag(w.inPls ? 'In PLS' : 'In Cash (DAI)', w.inPls ? 'p' : 'info') +
-    `<span class="${stratPct>=0?'up':'down'}">${stratPct>=0?'+':''}${stratPct.toFixed(2)}%</span>`;
+    `<span class="${stratPct>=0?'up':'down'}">${stratPct>=0?'+':''}${stratPct.toFixed(2)}%</span>` +
+    pendingTag + holdTag;
 
   document.getElementById('val-mock-baseline').textContent = '$' + baseValue.toFixed(2);
   document.getElementById('val-mock-baseline').className   = 'big ' + (basePct >= 0 ? 'up' : 'down');
@@ -907,9 +978,15 @@ const OBS_LOG_KEY   = 'sunpls_obs_log_v1';
 const OBS_LOG_LIMIT = 2000; // ~2-5 years at 1-3 updates/day
 let obsLog = (() => { try { return JSON.parse(localStorage.getItem(OBS_LOG_KEY) || '[]'); } catch { return []; } })();
 
-function recordObservation(nativeTs, functionalTs, snap) {
+// True only when a real on-chain update() has landed since the last-seen observation —
+// shared by the observation log and the mock wallet's confirmation gate.
+function isNewOracleUpdate(nativeTs, functionalTs) {
   const last = obsLog[obsLog.length - 1];
-  if (last && last.nativeTs === nativeTs && last.functionalTs === functionalTs) return; // no new update() since last observation
+  return !last || last.nativeTs !== nativeTs || last.functionalTs !== functionalTs;
+}
+
+function recordObservation(nativeTs, functionalTs, snap) {
+  if (!isNewOracleUpdate(nativeTs, functionalTs)) return;
   obsLog.push({ time: Date.now(), nativeTs, functionalTs, ...snap });
   obsLog = obsLog.slice(-OBS_LOG_LIMIT);
   localStorage.setItem(OBS_LOG_KEY, JSON.stringify(obsLog));
@@ -1323,10 +1400,19 @@ async function refresh() {
         kv('EMA blockspace component',     regimeInputs.blockspace.toFixed(4) + 'x');
       renderRegimeHist();
 
+      // True only when a real update() has landed since the last observation — gates both
+      // the mock wallet's confirmation counter and the observation log below.
+      const isNewUpdateEvent = isNewOracleUpdate(+idxPeek.timestamp, +emaPeek.timestamp);
+
       // ── Mock Wallet — regime backtest (simulation only) ─────────────────
+      // Uses rawRegime (not the display-debounced `regime`) — the wallet's own
+      // confirm-on-real-updates gate is a separate, much slower mechanism than the
+      // 30s-poll display debounce, and shouldn't be coupled to it.
       let mockWallet = loadMockWallet();
       if (!mockWallet) mockWallet = initMockWallet(plsPriceUsd);
-      mockWallet = applyMockWalletTick(mockWallet, regime.label, plsPriceUsd);
+      mockWallet = applyMockWalletTick(
+        mockWallet, rawRegime.category, rawRegime.label, emaAgeS, plsPriceUsd, isNewUpdateEvent
+      );
       saveMockWallet(mockWallet);
       renderMockWallet(mockWallet, plsPriceUsd);
 
