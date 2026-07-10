@@ -505,6 +505,40 @@
   </table>
 </div>
 
+<!-- ── Mock Wallet — Regime Backtest (simulation only, no real funds) ── -->
+<div class="section-label" style="margin-top:4px">Mock Wallet — Regime Backtest &nbsp;·&nbsp; <span style="color:var(--muted)">simulated $1,000, priced off on-chain PulseX WPLS/DAI</span></div>
+<div class="grid3" style="margin-bottom:12px">
+  <div class="card accent-border">
+    <div class="clabel">Regime Strategy</div>
+    <div class="big" id="val-mock-strategy">—</div>
+    <div class="cmeta" id="meta-mock-strategy"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Buy &amp; Hold Baseline</div>
+    <div class="big" id="val-mock-baseline">—</div>
+    <div class="cmeta" id="meta-mock-baseline"></div>
+  </div>
+  <div class="card">
+    <div class="clabel">Alpha vs Baseline</div>
+    <div class="big" id="val-mock-alpha">—</div>
+    <div class="cmeta" id="meta-mock-alpha"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">Simulated Trades <span class="dim" style="text-transform:none;font-size:10px">(0.30% simulated fee/slippage per trade, triggered by confirmed regime changes)</span></div>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Action</th><th>PLS Price</th><th>Triggered by</th><th>Value After</th></tr>
+    </thead>
+    <tbody id="mock-trades-body"><tr><td colspan="5" class="dim">Loading…</td></tr></tbody>
+  </table>
+  <div class="footer" style="margin-top:12px;margin-bottom:0" id="mock-meta-footer"></div>
+  <div class="footer" style="margin-top:6px;margin-bottom:0">
+    Simulated only — no real funds, no on-chain trades. Past/simulated performance is not indicative of future results. Analytics only, not financial advice.
+    <button onclick="resetMockWallet()" style="margin-left:8px;padding:4px 10px;font-size:11px">Reset simulation</button>
+  </div>
+</div>
+
 <!-- ── Actions ── -->
 <div class="actions">
   <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
@@ -539,6 +573,9 @@ const ADDR = {
   oracle:       '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
   controller:   '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
   vault:        '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
+  // PulseX V1 WPLS/DAI pair — token0=WPLS, token1=DAI, factory 0x1715a3…eba10d (verified on-chain).
+  // Used only as a USD price reference for the mock wallet backtest below — read-only, no writes.
+  wplsDaiPair:  '0xe56043671df55de5cdf8459710433c10324de0ae',
 };
 const RPC      = 'https://rpc.pulsechain.com';
 const HIST_KEY = 'sunpls_idx_hist_v2';
@@ -574,6 +611,9 @@ const CTRL_ABI = [
   'function emergencyEpochs() view returns (uint256)',
   'function deadbandSkips() view returns (uint256)',
 ];
+const PAIR_ABI = [
+  'function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
+];
 const VAULT_ABI = [
   'function totalDebt() view returns (uint256)',
   'function totalCollateral() view returns (uint256)',
@@ -605,6 +645,7 @@ const functionalEMAC = new ethers.Contract(ADDR.functionalEMA, FUNC_EMA_ABI, pro
 const oracleC       = new ethers.Contract(ADDR.oracle,       ORACLE_ABI,   prov);
 const ctrlC         = new ethers.Contract(ADDR.controller,   CTRL_ABI,     prov);
 const vaultC        = new ethers.Contract(ADDR.vault,        VAULT_ABI,    prov);
+const wplsDaiPairC  = new ethers.Contract(ADDR.wplsDaiPair,  PAIR_ABI,     prov);
 
 let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null,
     signer = null, countdown = 30;
@@ -735,6 +776,104 @@ function renderRegimeHist() {
   }
 }
 
+// ── Mock Wallet — regime backtest (pure simulation: no real funds, no on-chain trades) ──
+// Trades a simulated $1,000 between PLS and cash based on the *confirmed* Core Access
+// Regime label, and compares the result to a naive buy-and-hold-PLS baseline. Priced
+// against the on-chain PulseX V1 WPLS/DAI pair (ADDR.wplsDaiPair) — same "chain prices
+// itself" philosophy as the rest of this page, no external APIs.
+const MOCK_WALLET_KEY    = 'sunpls_mockwallet_v1';
+const MOCK_START_USD     = 1000;
+const MOCK_TRADE_FEE_BPS = 30; // 0.30% simulated PulseX swap fee/slippage per trade
+
+function loadMockWallet() {
+  try { return JSON.parse(localStorage.getItem(MOCK_WALLET_KEY)); } catch { return null; }
+}
+function saveMockWallet(w) { localStorage.setItem(MOCK_WALLET_KEY, JSON.stringify(w)); }
+
+function initMockWallet(priceUsd) {
+  return {
+    startTime: Date.now(),
+    startPriceUsd: priceUsd,
+    baselinePlsUnits: MOCK_START_USD / priceUsd,
+    plsUnits: MOCK_START_USD / priceUsd,
+    cashUsd: 0,
+    inPls: true,
+    trades: [{ time: Date.now(), action: 'BUY', priceUsd, regime: 'Initial position', valueUsd: MOCK_START_USD }],
+  };
+}
+
+// wantPls: Buy/Favorable Access -> long PLS; Caution -> exit to cash; Hold* -> keep current position.
+function applyMockWalletTick(w, regimeLabel, priceUsd) {
+  const wantPls = regimeLabel === 'Buy / Favorable Access' ? true
+                : regimeLabel === 'Caution'                ? false
+                : w.inPls;
+  if (wantPls !== w.inPls) {
+    if (wantPls) {
+      w.plsUnits = (w.cashUsd * (1 - MOCK_TRADE_FEE_BPS / 10000)) / priceUsd;
+      w.cashUsd  = 0;
+    } else {
+      w.cashUsd  = (w.plsUnits * priceUsd) * (1 - MOCK_TRADE_FEE_BPS / 10000);
+      w.plsUnits = 0;
+    }
+    w.inPls = wantPls;
+    w.trades.push({
+      time: Date.now(), action: wantPls ? 'BUY' : 'SELL', priceUsd, regime: regimeLabel,
+      valueUsd: wantPls ? w.plsUnits * priceUsd : w.cashUsd,
+    });
+    w.trades = w.trades.slice(-50);
+  }
+  return w;
+}
+
+function resetMockWallet() {
+  if (!confirm('Reset the simulated $1,000 mock wallet? This clears local trade history and restarts at the current PLS price.')) return;
+  localStorage.removeItem(MOCK_WALLET_KEY);
+  location.reload();
+}
+
+function renderMockWallet(w, priceUsd) {
+  const stratValue = w.inPls ? w.plsUnits * priceUsd : w.cashUsd;
+  const baseValue  = w.baselinePlsUnits * priceUsd;
+  const stratPct   = (stratValue / MOCK_START_USD - 1) * 100;
+  const basePct    = (baseValue  / MOCK_START_USD - 1) * 100;
+  const alpha      = stratValue - baseValue;
+  const alphaPct   = (stratValue / baseValue - 1) * 100;
+
+  document.getElementById('val-mock-strategy').textContent = '$' + stratValue.toFixed(2);
+  document.getElementById('val-mock-strategy').className   = 'big ' + (stratPct >= 0 ? 'up' : 'down');
+  document.getElementById('meta-mock-strategy').innerHTML  =
+    tag(w.inPls ? 'In PLS' : 'In Cash (DAI)', w.inPls ? 'p' : 'info') +
+    `<span class="${stratPct>=0?'up':'down'}">${stratPct>=0?'+':''}${stratPct.toFixed(2)}%</span>`;
+
+  document.getElementById('val-mock-baseline').textContent = '$' + baseValue.toFixed(2);
+  document.getElementById('val-mock-baseline').className   = 'big ' + (basePct >= 0 ? 'up' : 'down');
+  document.getElementById('meta-mock-baseline').innerHTML  =
+    `<span class="dim">Buy &amp; hold PLS since ${new Date(w.startTime).toLocaleDateString()}</span>` +
+    `<span class="${basePct>=0?'up':'down'}">${basePct>=0?'+':''}${basePct.toFixed(2)}%</span>`;
+
+  document.getElementById('val-mock-alpha').textContent = (alpha>=0?'+$':'-$') + Math.abs(alpha).toFixed(2);
+  document.getElementById('val-mock-alpha').className   = 'big ' + (alpha >= 0 ? 'up' : 'down');
+  document.getElementById('meta-mock-alpha').innerHTML   =
+    `<span class="${alpha>=0?'up':'down'}">${alphaPct>=0?'+':''}${alphaPct.toFixed(2)}% vs buy &amp; hold</span>`;
+
+  document.getElementById('mock-meta-footer').textContent =
+    `Started ${new Date(w.startTime).toLocaleString()} at $${w.startPriceUsd.toFixed(8)}/PLS · current $${priceUsd.toFixed(8)}/PLS (PulseX WPLS/DAI).`;
+
+  const tbody = document.getElementById('mock-trades-body');
+  if (!w.trades.length) { tbody.innerHTML = '<tr><td colspan="5" class="dim">No trades yet.</td></tr>'; return; }
+  tbody.innerHTML = '';
+  for (const t of [...w.trades].reverse().slice(0, 15)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="dim">${new Date(t.time).toLocaleString()}</td>` +
+      `<td class="${t.action==='BUY'?'up':'down'}">${t.action}</td>` +
+      `<td class="dim">$${t.priceUsd.toFixed(8)}</td>` +
+      `<td class="dim">${t.regime}</td>` +
+      `<td>$${t.valueUsd.toFixed(2)}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
 const fWPLS = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(6) + ' WPLS';
@@ -765,6 +904,7 @@ async function refresh() {
       oraclePeek, oracleHealthy, creepState,
       R, r, lastEpoch, epochCount, epochDur, limHits, frozenEps, emergEps, deadbands,
       totalDebt, totalColl, surplus, badDebt, ceiling, sysHealth,
+      daiPairReserves,
     ] = await Promise.all([
       indexC.peek(), indexC.lastRawIndex(), indexC.currentRawIndex(),
       indexC.isHealthy(), indexC.componentCount(),
@@ -782,11 +922,16 @@ async function refresh() {
       vaultC.totalDebt(), vaultC.totalCollateral(),
       vaultC.surplusBuffer(), vaultC.badDebtAccumulated(),
       vaultC.effectiveCeiling(), vaultC.systemHealth(),
+      wplsDaiPairC.getReserves(),
     ]);
 
     const accepted = idxPeek.index;
     const P        = oraclePeek.price;
     const capped   = !rawIdx.eq(accepted);
+
+    // token0=WPLS, token1=DAI on this pair (verified on-chain) — both 18 decimals.
+    const plsPriceUsd = +ethers.utils.formatUnits(daiPairReserves.reserve1, 18) /
+                        +ethers.utils.formatUnits(daiPairReserves.reserve0, 18);
 
     // ── Accepted index card ───────────────────────────────────────────────
     document.getElementById('val-accepted').textContent = f18(accepted);
@@ -1097,6 +1242,13 @@ async function refresh() {
         kv('Liquidity depth component',    regimeInputs.liquidityDepth.toFixed(4) + 'x') +
         kv('EMA blockspace component',     regimeInputs.blockspace.toFixed(4) + 'x');
       renderRegimeHist();
+
+      // ── Mock Wallet — regime backtest (simulation only) ─────────────────
+      let mockWallet = loadMockWallet();
+      if (!mockWallet) mockWallet = initMockWallet(plsPriceUsd);
+      mockWallet = applyMockWalletTick(mockWallet, regime.label, plsPriceUsd);
+      saveMockWallet(mockWallet);
+      renderMockWallet(mockWallet, plsPriceUsd);
     }
 
   } catch(e) {
