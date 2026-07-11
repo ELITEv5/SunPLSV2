@@ -490,6 +490,7 @@
   <div class="big" id="val-regime">—</div>
   <div class="cmeta" id="meta-regime"></div>
   <div id="regime-matched" style="font-size:11px;margin-top:8px"></div>
+  <div id="regime-migration" style="font-size:11px;margin-top:6px"></div>
   <div id="regime-inputs" style="margin-top:12px"></div>
   <div class="footer" style="margin-top:12px;margin-bottom:0">
     Analytics only. Not financial advice. Does not affect SunPLS monetary policy.
@@ -1400,6 +1401,26 @@ async function refresh() {
       const snapHealthCls = snap.healthBps >= 10000 ? 'up' : snap.healthBps >= 7000 ? 'warn' : 'down';
       const healthPending = regime !== rawRegime && snap.healthBps !== regimeInputs.healthBps
         ? ` <span class="dim">(pending — live is ${(regimeInputs.healthBps/100).toFixed(0)}%)</span>` : '';
+
+      // Migration note: accepted v3 lags live v3 by design (capped move per update()), so a
+      // real shift shows up in live first. Flag it only when the two sit on opposite sides
+      // of the functionalCheap baseline — i.e. a potential label change is brewing.
+      const cheap = REGIME_THRESHOLDS.functionalCheap;
+      const acceptedFavorable = snap.functionalAccepted < cheap;
+      const liveFavorable     = snap.functionalLive     < cheap;
+      let migrationNote = '';
+      if (acceptedFavorable && !liveFavorable) {
+        migrationNote = `Accepted signal still favorable (${snap.functionalAccepted.toFixed(4)}x) — live signal warming ` +
+          `(${snap.functionalLive.toFixed(4)}x, at/above baseline). If live holds here across more updates, expect the ` +
+          `regime to migrate toward Hold / Constructive.`;
+      } else if (!acceptedFavorable && liveFavorable) {
+        migrationNote = `Accepted signal not yet favorable (${snap.functionalAccepted.toFixed(4)}x) — live signal cooling ` +
+          `(${snap.functionalLive.toFixed(4)}x, below baseline). If live holds here across more updates, expect the ` +
+          `regime to migrate toward Buy / Favorable Access.`;
+      }
+      document.getElementById('regime-migration').innerHTML =
+        migrationNote ? `<span class="dim">${migrationNote}</span>` : '';
+
       document.getElementById('regime-inputs').innerHTML =
         kv('Native accepted index',        snap.nativeAccepted.toFixed(4) + 'x') +
         kv('Functional v3 accepted index', snap.functionalAccepted.toFixed(4) + 'x') +
