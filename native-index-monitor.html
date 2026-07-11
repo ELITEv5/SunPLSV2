@@ -324,7 +324,7 @@
       <span>Contracts —</span>
       <span>Native Index Oracle:</span>     <a href="https://scan.pulsechain.com/address/0x1aE9903839B7A3f8a16107625e96CE16cC98049A" target="_blank">0x1aE9…049A</a>
       <span>Functional Index v2:</span>      <a href="https://scan.pulsechain.com/address/0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b" target="_blank">0x5BA5…Ba1b</a>
-      <span>Functional Index EMA:</span>    <a href="https://scan.pulsechain.com/address/0x510B3b62653685A4801f62b0aFd37A6f80b4BfB5" target="_blank">0x510B…BfB5</a>
+      <span>Functional Index EMA v4:</span>    <a href="https://scan.pulsechain.com/address/0x3eE7E0E9c22DD8f3e7D2376515F1B0436B313D1f" target="_blank">0x3eE7…313D1f</a>
       <span>Price Oracle:</span>            <a href="https://scan.pulsechain.com/address/0xC74b5d405276FF87Ad798acCF104c6E727cfe66b" target="_blank">0xC74b…e66b</a>
       <span>Controller:</span>              <a href="https://scan.pulsechain.com/address/0x6828BD8c3eF04aA927374a45b4796A3cb6C54945" target="_blank">0x6828…945</a>
       <span>Vault:</span>                   <a href="https://scan.pulsechain.com/address/0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e" target="_blank">0xfbBd…29e</a>
@@ -582,7 +582,7 @@ const ADDR = {
   index:        '0x1aE9903839B7A3f8a16107625e96CE16cC98049A',
   // functional v1 (0xcd708104fDE8E759970e22B75E9aCe94f3ab8342) removed — market/depth broken (tiny trades)
   functional2:  '0x5BA562ebb9402Fd25aA9aa8766ca07b5f966Ba1b',
-  functionalEMA: '0x510B3b62653685A4801f62b0aFd37A6f80b4BfB5',
+  functionalEMA: '0x3eE7E0E9c22DD8f3e7D2376515F1B0436B313D1f', // v4 — EMA-smoothed reserves, fixes v3's spot-manipulable market access/depth (see git history / conversation)
   oracle:       '0xC74b5d405276FF87Ad798acCF104c6E727cfe66b',
   controller:   '0x6828BD8c3eF04aA927374a45b4796A3cb6C54945',
   vault:        '0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e',
@@ -1014,7 +1014,18 @@ function renderObsLog() {
     `${new Date(first.time).toLocaleDateString()} → ${new Date(lastObs.time).toLocaleDateString()} &nbsp;·&nbsp; ${countsStr}`;
 
   bodyEl.innerHTML = '';
-  for (const o of [...obsLog].reverse().slice(0, 20)) {
+  const shown = [...obsLog].reverse().slice(0, 20);
+  for (let i = 0; i < shown.length; i++) {
+    const o = shown[i];
+    const prev = shown[i + 1]; // one step further back in time (list is newest-first)
+    // Entries before this field existed have no oracleAddress — treat as pre-v4 (v3).
+    if (prev && (prev.oracleAddress || null) !== (o.oracleAddress || null)) {
+      const div = document.createElement('tr');
+      div.innerHTML = `<td colspan="6" class="dim" style="text-align:center;border-bottom:1px dashed var(--border)">`
+        + `— functional oracle changed (${prev.oracleAddress ? prev.oracleAddress.slice(0,8) : 'v3'}…→${o.oracleAddress ? o.oracleAddress.slice(0,8) : 'v3'}…) — accepted-index baseline reset here, not directly comparable across this line —`
+        + `</td>`;
+      bodyEl.appendChild(div);
+    }
     const tr = document.createElement('tr');
     tr.innerHTML =
       `<td class="dim">${new Date(o.time).toLocaleString()}</td>` +
@@ -1456,6 +1467,7 @@ async function refresh() {
         functionalAccepted: regimeInputs.functionalAccepted,
         healthBps:          regimeInputs.healthBps,
         plsPriceUsd,
+        oracleAddress:      ADDR.functionalEMA,
       });
     }
 
