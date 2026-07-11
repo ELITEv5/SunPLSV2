@@ -1370,7 +1370,11 @@ async function refresh() {
         marketAccess:       +ethers.utils.formatUnits(emaComponents.marketAccessComponent, 18),
         liquidityDepth:     +ethers.utils.formatUnits(emaComponents.liquidityDepthComponent, 18),
       };
-      const rawRegime = classifyCoreAccessRegime(regimeInputs);
+      // Attach the exact inputs this classification was made from, so that whichever
+      // object ends up displayed (fresh `raw` or an older `regimeDisplayed` still
+      // pending confirmation) renders a self-consistent label + reason + inputs table —
+      // never a current label paired with stale inputs or vice versa.
+      const rawRegime = { ...classifyCoreAccessRegime(regimeInputs), snapshot: { ...regimeInputs } };
       const regime    = resolveDisplayedRegime(rawRegime); // debounced for display
       recordRegimeTransition(regime, regimeInputs.nativeAccepted, regimeInputs.functionalAccepted);
 
@@ -1390,14 +1394,20 @@ async function refresh() {
       document.getElementById('regime-matched').innerHTML =
         `<span class="dim" title="${regime.matchedRule}">Matched rule: ${regime.matchedRule}</span>`;
 
+      // Rendered from regime.snapshot (NOT the live accepted/emaHealthBps/etc. vars above) —
+      // must always match what val-regime/meta-regime/regime-matched are describing.
+      const snap = regime.snapshot;
+      const snapHealthCls = snap.healthBps >= 10000 ? 'up' : snap.healthBps >= 7000 ? 'warn' : 'down';
+      const healthPending = regime !== rawRegime && snap.healthBps !== regimeInputs.healthBps
+        ? ` <span class="dim">(pending — live is ${(regimeInputs.healthBps/100).toFixed(0)}%)</span>` : '';
       document.getElementById('regime-inputs').innerHTML =
-        kv('Native accepted index',        f18(accepted)) +
-        kv('Functional v3 accepted index', f18(emaAccepted)) +
-        kv('Functional v3 live spot',      f18(emaSpot)) +
-        kv('Health overlay',               (emaHealthBps/100).toFixed(0) + '%', emaHealthCls) +
-        kv('Market access component',      regimeInputs.marketAccess.toFixed(4) + 'x') +
-        kv('Liquidity depth component',    regimeInputs.liquidityDepth.toFixed(4) + 'x') +
-        kv('EMA blockspace component',     regimeInputs.blockspace.toFixed(4) + 'x');
+        kv('Native accepted index',        snap.nativeAccepted.toFixed(4) + 'x') +
+        kv('Functional v3 accepted index', snap.functionalAccepted.toFixed(4) + 'x') +
+        kv('Functional v3 live spot',      snap.functionalLive.toFixed(4) + 'x') +
+        kv('Health overlay',               (snap.healthBps/100).toFixed(0) + '%' + healthPending, snapHealthCls) +
+        kv('Market access component',      snap.marketAccess.toFixed(4) + 'x') +
+        kv('Liquidity depth component',    snap.liquidityDepth.toFixed(4) + 'x') +
+        kv('EMA blockspace component',     snap.blockspace.toFixed(4) + 'x');
       renderRegimeHist();
 
       // True only when a real update() has landed since the last observation — gates both
