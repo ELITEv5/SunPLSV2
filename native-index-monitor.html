@@ -258,10 +258,10 @@
     </div>
 
     <div class="modal-section">
-      <h3>Oracle 3 — Functional Index v3 (EMA blockspace)</h3>
+      <h3>Oracle 3 — Functional Index v4 (EMA blockspace + EMA reserves)</h3>
       <p>
         Fixes v2's blockspace volatility. Live data showed gas swings dominating the accepted index
-        (oscillating 0.9872x ↔ 1.0100x from gas alone). v3 applies a 10% EMA to the gas price:
+        (oscillating 0.9872x ↔ 1.0100x from gas alone). v3 applied a 10% EMA to the gas price:
       </p>
       <p style="font-family:monospace;font-size:12px;background:rgba(167,139,250,.05);padding:10px 12px;border-radius:6px;margin-top:8px;color:var(--accent)">
         smoothedGas = 0.10 × block.basefee + 0.90 × prevSmoothedGas
@@ -271,6 +271,14 @@
         over ~10 updates before reaching 65% of its full effect. The <b>gasSnapshot()</b> function
         exposes both smoothed and raw gas side-by-side so the monitor can show exactly how much
         the EMA is dampening vs what raw gas would give. Same weights as v2.
+      </p>
+      <p style="margin-top:10px">
+        v3's market access and liquidity depth were still read live from pool reserves — manipulable
+        within a single block (quantified: ~$257 via flash loan to flip a full update between the
+        1% cap's two extremes, against PulseChain's actual ~$1.76M total lending TVL). <b>v4</b>
+        replaces the live reserve reads with the same EMA smoothing gas already used, on the
+        reserves themselves — a single-block manipulation now only carries ~10% of its size into
+        the index instead of 100%. v3 is retired; the dashboard reads v4 exclusively.
       </p>
       <p style="margin-top:10px">
         A separate <b>health overlay</b> reads the live vault, stability pool, and price oracle.
@@ -449,8 +457,8 @@
   </table>
 </div>
 
-<!-- ── Functional Index EMA (v3) ── -->
-<div class="section-label" style="margin-top:4px">Functional Index v3 — EMA Blockspace &nbsp;·&nbsp; 20% blockspace (EMA 10%) | 40% market | 40% depth &nbsp;·&nbsp; <span style="color:var(--accent)">smoothed gas component</span></div>
+<!-- ── Functional Index EMA (v4) ── -->
+<div class="section-label" style="margin-top:4px">Functional Index v4 — EMA Blockspace + EMA Reserves &nbsp;·&nbsp; 20% blockspace (EMA 10%) | 40% market | 40% depth &nbsp;·&nbsp; <span style="color:var(--accent)">smoothed gas + smoothed reserves</span></div>
 <div class="grid3" style="margin-bottom:12px">
   <div class="card accent-border">
     <div class="clabel">Accepted Index (EMA)</div>
@@ -546,7 +554,7 @@
   <div class="clabel" style="margin-bottom:10px" id="obs-log-summary">Loading…</div>
   <table>
     <thead>
-      <tr><th>Time</th><th>Regime</th><th>Native</th><th>Functional v3</th><th>Health</th><th>PLS/USD</th></tr>
+      <tr><th>Time</th><th>Regime</th><th>Native</th><th>Functional v4</th><th>Health</th><th>PLS/USD</th></tr>
     </thead>
     <tbody id="obs-log-body"><tr><td colspan="6" class="dim">Loading…</td></tr></tbody>
   </table>
@@ -1438,7 +1446,7 @@ async function refresh() {
       const healthPending = regime !== rawRegime && snap.healthBps !== regimeInputs.healthBps
         ? ` <span class="dim">(pending — live is ${(regimeInputs.healthBps/100).toFixed(0)}%)</span>` : '';
 
-      // Migration note: accepted v3 lags live v3 by design (capped move per update()), so a
+      // Migration note: accepted lags live by design (capped move per update()), so a
       // real shift shows up in live first. Flag it only when the two sit on opposite sides
       // of the functionalCheap baseline — i.e. a potential label change is brewing.
       const cheap = REGIME_THRESHOLDS.functionalCheap;
@@ -1459,8 +1467,8 @@ async function refresh() {
 
       document.getElementById('regime-inputs').innerHTML =
         kv('Native accepted index',        snap.nativeAccepted.toFixed(4) + 'x') +
-        kv('Functional v3 accepted index', snap.functionalAccepted.toFixed(4) + 'x') +
-        kv('Functional v3 live spot',      snap.functionalLive.toFixed(4) + 'x') +
+        kv('Functional v4 accepted index', snap.functionalAccepted.toFixed(4) + 'x') +
+        kv('Functional v4 live spot',      snap.functionalLive.toFixed(4) + 'x') +
         kv('Health overlay',               (snap.healthBps/100).toFixed(0) + '%' + healthPending, snapHealthCls) +
         kv('Market access component',      snap.marketAccess.toFixed(4) + 'x') +
         kv('Liquidity depth component',    snap.liquidityDepth.toFixed(4) + 'x') +
