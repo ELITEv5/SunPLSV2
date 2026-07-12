@@ -685,6 +685,19 @@ const REGIME_CONFIRM_TICKS = 2;
 const STALE_AGING_SECONDS = 16 * 3600;   // ~16h — longer than a typical daily gap, just a nudge
 const STALE_HARD_SECONDS  = 72 * 3600;   // 3 days — well beyond "busy day," treat as abandoned/stale
 
+// How far past a threshold a reading must sit before it counts as "Strong" rather than
+// "Mild" — e.g. native=1.0286x is only 0.86 points past nativeStrong(1.02), well under
+// this 1-point band, so it reads as Mild even though it technically clears the line.
+// Sized to roughly match the spacing already used between adjacent thresholds (~1 point).
+const STRENGTH_BAND = 0.01;
+
+// Strength is display-only — it never changes `label`/`category`, so the mock wallet's
+// buy/sell decisions and the regime-history counts are completely unaffected by it. It
+// exists purely so "0.9965x" and "0.954x" don't collapse into the same-looking label.
+function _strengthOf(margins) {
+  return margins.every(m => m >= STRENGTH_BAND) ? 'strong' : 'mild';
+}
+
 // Pure classifier — same inputs always produce the same output, no I/O, no state.
 // `isStale` here means "hard stale" (STALE_HARD_SECONDS+) — ordinary gaps between manual
 // updates should NOT be passed in as isStale; use `isAging` (computed by the caller) for
@@ -705,7 +718,7 @@ function classifyCoreAccessRegime({
   if (frozen) {
     const staleOnly = isStale && !unhealthy;
     return {
-      label: 'Caution', tone: 'danger',
+      label: 'Caution', tone: 'danger', strength: null,
       reason: staleOnly ? 'Signal stale — awaiting update' : 'Signal unhealthy',
       category: staleOnly ? 'stale' : 'unhealthy',
       matchedRule: staleOnly
@@ -715,7 +728,7 @@ function classifyCoreAccessRegime({
   }
   if (reduced) {
     return {
-      label: 'Caution', tone: 'warning',
+      label: 'Caution', tone: 'warning', strength: null,
       reason: 'Signal health reduced',
       category: 'reduced-health',
       matchedRule: `health < 100% (health=${healthPctStr})`,
@@ -724,6 +737,7 @@ function classifyCoreAccessRegime({
   if (nativeAccepted > t.nativeStrong && functionalAccepted < t.functionalCheap) {
     return {
       label: 'Buy / Favorable Access', tone: 'positive',
+      strength: _strengthOf([nativeAccepted - t.nativeStrong, t.functionalCheap - functionalAccepted]),
       reason: 'Native strength with below-baseline functional access',
       category: 'buy',
       matchedRule: `native > ${t.nativeStrong}x AND functional < ${t.functionalCheap}x`,
@@ -731,7 +745,7 @@ function classifyCoreAccessRegime({
   }
   if (nativeAccepted > t.nativeConstructive && functionalAccepted >= t.functionalCheap && functionalAccepted < t.functionalNeutralHigh) {
     return {
-      label: 'Hold / Constructive', tone: 'neutral-positive',
+      label: 'Hold / Constructive', tone: 'neutral-positive', strength: null,
       reason: 'Native strength with near-neutral access',
       category: 'hold-constructive',
       matchedRule: `native > ${t.nativeConstructive}x AND ${t.functionalCheap}x ≤ functional < ${t.functionalNeutralHigh}x`,
@@ -740,6 +754,7 @@ function classifyCoreAccessRegime({
   if (functionalAccepted > t.functionalExpensive) {
     return {
       label: 'Caution', tone: 'warning',
+      strength: _strengthOf([functionalAccepted - t.functionalExpensive]),
       reason: 'Functional access is becoming expensive',
       category: 'expensive-function',
       matchedRule: `functional > ${t.functionalExpensive}x`,
@@ -748,13 +763,14 @@ function classifyCoreAccessRegime({
   if (nativeAccepted < t.nativeWeak && functionalAccepted > t.functionalNeutralHigh) {
     return {
       label: 'Caution', tone: 'warning',
+      strength: _strengthOf([t.nativeWeak - nativeAccepted, functionalAccepted - t.functionalNeutralHigh]),
       reason: 'Weak native basket with expensive functional access',
       category: 'weak-native-expensive-access',
       matchedRule: `native < ${t.nativeWeak}x AND functional > ${t.functionalNeutralHigh}x`,
     };
   }
   return {
-    label: 'Hold / Neutral', tone: 'neutral',
+    label: 'Hold / Neutral', tone: 'neutral', strength: null,
     reason: 'No strong regime signal',
     category: 'neutral',
     matchedRule: 'no threshold condition matched',
@@ -789,7 +805,7 @@ function recordRegimeTransition(regime, nativeAccepted, functionalAccepted) {
   const last = regimeHist[regimeHist.length - 1];
   if (last && last.label === regime.label) return;
   regimeHist.push({
-    time: Date.now(), label: regime.label, tone: regime.tone,
+    time: Date.now(), label: regime.label, tone: regime.tone, strength: regime.strength,
     reason: regime.reason, matchedRule: regime.matchedRule,
     native: nativeAccepted.toFixed(4), functional: functionalAccepted.toFixed(4),
   });
@@ -805,9 +821,10 @@ function renderRegimeHist() {
   el.innerHTML = '';
   for (const e of [...regimeHist].reverse().slice(0, 12)) {
     const tr = document.createElement('tr');
+    const strengthPfx = e.strength === 'strong' ? 'Strong ' : e.strength === 'mild' ? 'Mild ' : '';
     tr.innerHTML =
       `<td class="dim">${new Date(e.time).toLocaleString()}</td>` +
-      `<td>${e.label}</td>` +
+      `<td>${strengthPfx}${e.label}</td>` +
       `<td class="dim">${e.reason}</td>` +
       `<td class="dim">native ${e.native}x / func ${e.functional}x</td>`;
     el.appendChild(tr);
@@ -1006,7 +1023,11 @@ function renderObsLog() {
   }
 
   const counts = {};
-  for (const o of obsLog) counts[o.regimeLabel] = (counts[o.regimeLabel] || 0) + 1;
+  for (const o of obsLog) {
+    const pfx = o.regimeStrength === 'strong' ? 'Strong ' : o.regimeStrength === 'mild' ? 'Mild ' : '';
+    const key = pfx + o.regimeLabel;
+    counts[key] = (counts[key] || 0) + 1;
+  }
   const countsStr = Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join('  ·  ');
   const first = obsLog[0], lastObs = obsLog[obsLog.length - 1];
   summaryEl.innerHTML =
@@ -1026,10 +1047,11 @@ function renderObsLog() {
         + `</td>`;
       bodyEl.appendChild(div);
     }
+    const obsStrengthPfx = o.regimeStrength === 'strong' ? 'Strong ' : o.regimeStrength === 'mild' ? 'Mild ' : '';
     const tr = document.createElement('tr');
     tr.innerHTML =
       `<td class="dim">${new Date(o.time).toLocaleString()}</td>` +
-      `<td>${o.regimeLabel}</td>` +
+      `<td>${obsStrengthPfx}${o.regimeLabel}</td>` +
       `<td class="dim">${o.nativeAccepted.toFixed(4)}x</td>` +
       `<td class="dim">${o.functionalAccepted.toFixed(4)}x</td>` +
       `<td class="dim">${(o.healthBps/100).toFixed(0)}%</td>` +
@@ -1397,7 +1419,10 @@ async function refresh() {
         positive: 'ok', 'neutral-positive': 'p', warning: 'warn', danger: 'bad', neutral: 'n',
       }[regime.tone] || 'n';
 
-      document.getElementById('val-regime').textContent = regime.label;
+      const strengthPrefix = regime.strength === 'strong' ? 'Strong '
+                            : regime.strength === 'mild'   ? 'Mild '
+                            : '';
+      document.getElementById('val-regime').textContent = strengthPrefix + regime.label;
       document.getElementById('val-regime').className   = 'big ' + regimeBigCls;
       document.getElementById('meta-regime').innerHTML  =
         tag(regime.reason, regimeTagCls) +
@@ -1461,6 +1486,7 @@ async function refresh() {
       // ── Observation log — one row per real update(), the actual learning dataset ──
       recordObservation(+idxPeek.timestamp, +emaPeek.timestamp, {
         regimeLabel:        regime.label,
+        regimeStrength:     regime.strength,
         regimeReason:       regime.reason,
         matchedRule:        regime.matchedRule,
         nativeAccepted:     regimeInputs.nativeAccepted,
