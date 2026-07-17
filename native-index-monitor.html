@@ -52,6 +52,7 @@
     .big.neutral { color: var(--text); }
     .big.warn { color: var(--yellow); }
     .big.accent { color: var(--accent); }
+    .big.pending { color: var(--blue); }
     .cmeta { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
     .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; }
@@ -693,6 +694,27 @@ const REGIME_CONFIRM_TICKS = 2;
 const STALE_AGING_SECONDS = 16 * 3600;   // ~16h — longer than a typical daily gap, just a nudge
 const STALE_HARD_SECONDS  = 72 * 3600;   // 3 days — well beyond "busy day," treat as abandoned/stale
 
+// Health is read LIVE on every 30s poll (unlike native/functional accepted, which only
+// move on real update() calls) — so a single-tick blip in the price oracle's own
+// isHealthy() flooring health at 50% for one read shows up immediately, then recovers.
+// That's refresh-state noise, not a real problem, and must not (a) flicker the display
+// or (b) count toward the mock wallet's sell confirmation. Require degradation to persist
+// continuously for HEALTH_CONFIRM_SECONDS before treating it as genuine Caution; before
+// that, show "Data Pending" — an honest "signal isn't stable enough to call yet" state
+// that the wallet treats as hold-current-position, same as Hold/Neutral.
+const HEALTH_CONFIRM_SECONDS = 90; // ~3 ticks at the 30s refresh cadence
+let healthDegradedSince = null; // ms timestamp health first read <100%, reset whenever it reads 100%
+
+// Hard-stale (STALE_HARD_SECONDS+, no update() at all) is excluded — that's a slow,
+// unambiguous signal, not the kind of blip this gate exists for.
+function resolveHealthPending(healthBps, isHealthy, isStale) {
+  if (isStale) { healthDegradedSince = null; return false; }
+  const degradedNow = isHealthy === false || (healthBps != null && healthBps < 10000);
+  if (!degradedNow) { healthDegradedSince = null; return false; }
+  if (healthDegradedSince === null) healthDegradedSince = Date.now();
+  return (Date.now() - healthDegradedSince) / 1000 < HEALTH_CONFIRM_SECONDS;
+}
+
 // How far past a threshold a reading must sit before it counts as "Strong" rather than
 // "Mild" — e.g. native=1.0286x is only 0.86 points past nativeStrong(1.02), well under
 // this 1-point band, so it reads as Mild even though it technically clears the line.
@@ -791,7 +813,7 @@ let regimeDisplayed = null, regimePending = null, regimePendingCount = 0;
 let regimeHist = (() => { try { return JSON.parse(localStorage.getItem(REGIME_HIST_KEY) || '[]'); } catch { return []; } })();
 
 function resolveDisplayedRegime(raw) {
-  if (raw.tone === 'danger' || !regimeDisplayed || raw.label === regimeDisplayed.label) {
+  if (raw.tone === 'danger' || raw.category === 'data-pending' || !regimeDisplayed || raw.label === regimeDisplayed.label) {
     regimePending = null; regimePendingCount = 0;
     regimeDisplayed = raw;
     return raw;
@@ -1412,19 +1434,32 @@ async function refresh() {
         marketAccess:       +ethers.utils.formatUnits(emaComponents.marketAccessComponent, 18),
         liquidityDepth:     +ethers.utils.formatUnits(emaComponents.liquidityDepthComponent, 18),
       };
+      // Health must persist degraded for HEALTH_CONFIRM_SECONDS before it's trusted as a
+      // real Caution — a single-tick blip shows "Data Pending" instead, which the mock
+      // wallet treats as hold-current-position (same as Hold/Neutral), not a sell signal.
+      const isHealthPending = resolveHealthPending(regimeInputs.healthBps, regimeInputs.isHealthy, regimeInputs.isStale);
+      const classified = isHealthPending
+        ? {
+            label: 'Data Pending', tone: 'pending', strength: null,
+            reason: 'Health reading unstable — confirming',
+            category: 'data-pending',
+            matchedRule: `health degraded <${HEALTH_CONFIRM_SECONDS}s so far (health=${(regimeInputs.healthBps/100).toFixed(0)}%) — not yet trusted`,
+          }
+        : classifyCoreAccessRegime(regimeInputs);
+
       // Attach the exact inputs this classification was made from, so that whichever
       // object ends up displayed (fresh `raw` or an older `regimeDisplayed` still
       // pending confirmation) renders a self-consistent label + reason + inputs table —
       // never a current label paired with stale inputs or vice versa.
-      const rawRegime = { ...classifyCoreAccessRegime(regimeInputs), snapshot: { ...regimeInputs } };
+      const rawRegime = { ...classified, snapshot: { ...regimeInputs } };
       const regime    = resolveDisplayedRegime(rawRegime); // debounced for display
       recordRegimeTransition(regime, regimeInputs.nativeAccepted, regimeInputs.functionalAccepted);
 
       const regimeBigCls = {
-        positive: 'up', 'neutral-positive': 'accent', warning: 'warn', danger: 'down', neutral: 'neutral',
+        positive: 'up', 'neutral-positive': 'accent', warning: 'warn', danger: 'down', neutral: 'neutral', pending: 'pending',
       }[regime.tone] || 'neutral';
       const regimeTagCls = {
-        positive: 'ok', 'neutral-positive': 'p', warning: 'warn', danger: 'bad', neutral: 'n',
+        positive: 'ok', 'neutral-positive': 'p', warning: 'warn', danger: 'bad', neutral: 'n', pending: 'info',
       }[regime.tone] || 'n';
 
       const strengthPrefix = regime.strength === 'strong' ? 'Strong '
