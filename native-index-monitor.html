@@ -499,6 +499,7 @@
   <div class="big" id="val-regime">—</div>
   <div class="cmeta" id="meta-regime"></div>
   <div id="regime-matched" style="font-size:11px;margin-top:8px"></div>
+  <div id="regime-action" style="font-size:12px;margin-top:8px;font-weight:bold"></div>
   <div id="regime-migration" style="font-size:11px;margin-top:6px"></div>
   <div id="regime-inputs" style="margin-top:12px"></div>
   <div class="footer" style="margin-top:12px;margin-bottom:0">
@@ -1473,6 +1474,19 @@ async function refresh() {
         (isAging && !regimeInputs.isStale ? tag(`Data age ${(emaAgeS/3600).toFixed(1)}h — awaiting your next update()`, 'n') : '');
       document.getElementById('regime-matched').innerHTML =
         `<span class="dim" title="${regime.matchedRule}">Matched rule: ${regime.matchedRule}</span>`;
+
+      // Derived from the exact same function the mock wallet itself calls (rawRegime.category
+      // + live emaAgeS, not the debounced display regime) — so this can never say one thing
+      // while the wallet actually does another. Explicit per the design rule: measurement
+      // layer healthy -> classify normally; pending/inconsistent -> freeze position, no new
+      // action; only genuine sustained stress becomes an actual sell.
+      const walletDesired = desiredWalletPosition(rawRegime.category, emaAgeS);
+      const actionCls  = walletDesired === true ? 'up' : walletDesired === false ? 'down' : 'dim';
+      const actionText = walletDesired === true  ? 'Buy / hold PLS position'
+                        : walletDesired === false ? 'Sell / hold cash position'
+                        : 'Hold current position — no new action';
+      document.getElementById('regime-action').innerHTML =
+        `<span class="${actionCls}">Action: ${actionText}</span>`;
 
       // Rendered from regime.snapshot (NOT the live accepted/emaHealthBps/etc. vars above) —
       // must always match what val-regime/meta-regime/regime-matched are describing.
