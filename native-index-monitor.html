@@ -1563,11 +1563,16 @@ async function refresh() {
       renderMockWallet(mockWallet, plsPriceUsd);
 
       // ── Observation log — one row per real update(), the actual learning dataset ──
+      // Uses rawRegime, NOT the UI-debounced `regime` — same reasoning as the mock wallet:
+      // the observation log only fires once per real update() event (rare, not a 30s poll),
+      // so there's no flicker risk to guard against here. Logging `regime` instead could
+      // capture the tail end of a still-pending display confirmation left over from BEFORE
+      // this update landed, rather than what this update actually produced.
       recordObservation(+idxPeek.timestamp, +emaPeek.timestamp, {
-        regimeLabel:        regime.label,
-        regimeStrength:     regime.strength,
-        regimeReason:       regime.reason,
-        matchedRule:        regime.matchedRule,
+        regimeLabel:        rawRegime.label,
+        regimeStrength:     rawRegime.strength,
+        regimeReason:       rawRegime.reason,
+        matchedRule:        rawRegime.matchedRule,
         nativeAccepted:     regimeInputs.nativeAccepted,
         functionalAccepted: regimeInputs.functionalAccepted,
         healthBps:          regimeInputs.healthBps,
