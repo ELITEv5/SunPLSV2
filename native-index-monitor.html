@@ -723,12 +723,19 @@ function _setHealthDegradedSince(v) {
 
 // Hard-stale (STALE_HARD_SECONDS+, no update() at all) is excluded — that's a slow,
 // unambiguous signal, not the kind of blip this gate exists for.
+// Returns { pending, elapsedSeconds } — elapsedSeconds is how long health has been
+// continuously degraded, INCLUDING silent background polling between real update()
+// events. A "Caution" fired from health should always be able to show this number,
+// so it's self-evidently a genuine 90s+ confirmation and not an instant flip on a
+// blip — the persistence gate can be running correctly and still look suspicious
+// if you can't see the elapsed time that justified it.
 function resolveHealthPending(healthBps, isHealthy, isStale) {
-  if (isStale) { _setHealthDegradedSince(null); return false; }
+  if (isStale) { _setHealthDegradedSince(null); return { pending: false, elapsedSeconds: null }; }
   const degradedNow = isHealthy === false || (healthBps != null && healthBps < 10000);
-  if (!degradedNow) { _setHealthDegradedSince(null); return false; }
+  if (!degradedNow) { _setHealthDegradedSince(null); return { pending: false, elapsedSeconds: null }; }
   if (healthDegradedSince === null) _setHealthDegradedSince(Date.now());
-  return (Date.now() - healthDegradedSince) / 1000 < HEALTH_CONFIRM_SECONDS;
+  const elapsedSeconds = (Date.now() - healthDegradedSince) / 1000;
+  return { pending: elapsedSeconds < HEALTH_CONFIRM_SECONDS, elapsedSeconds };
 }
 
 // How far past a threshold a reading must sit before it counts as "Strong" rather than
@@ -753,13 +760,18 @@ function _strengthOf(margins) {
 // treated the same as a genuine health fault or an expensive/weak-access threshold.
 function classifyCoreAccessRegime({
   nativeAccepted, functionalAccepted, functionalLive, healthBps,
-  isStale, isHealthy, blockspace, marketAccess, liquidityDepth,
+  isStale, isHealthy, blockspace, marketAccess, liquidityDepth, healthDegradedSeconds,
 }) {
   const t = REGIME_THRESHOLDS;
   const unhealthy = isHealthy === false || (healthBps != null && healthBps < 7000);
   const frozen    = isStale || unhealthy;
   const reduced   = !frozen && healthBps != null && healthBps < 10000;
   const healthPctStr = healthBps != null ? (healthBps / 100).toFixed(0) + '%' : 'n/a';
+  // Only meaningful once the persistence gate has actually confirmed degradation (i.e. we're
+  // in the `unhealthy`/`reduced` branches at all) — makes a Caution-from-health self-evidently
+  // a genuine sustained confirmation, not an instant flip on a single blip, even though most of
+  // that persistence time was tracked silently between real update() events, not logged.
+  const persistedStr = healthDegradedSeconds != null ? `, degraded ${healthDegradedSeconds.toFixed(0)}s (incl. background polling)` : '';
 
   if (frozen) {
     const staleOnly = isStale && !unhealthy;
@@ -769,7 +781,7 @@ function classifyCoreAccessRegime({
       category: staleOnly ? 'stale' : 'unhealthy',
       matchedRule: staleOnly
         ? 'no update() in 3+ days'
-        : `unhealthy (health=${healthPctStr}${isHealthy === false ? ', isHealthy=false' : ''})`,
+        : `unhealthy (health=${healthPctStr}${isHealthy === false ? ', isHealthy=false' : ''}${persistedStr})`,
     };
   }
   if (reduced) {
@@ -777,7 +789,7 @@ function classifyCoreAccessRegime({
       label: 'Caution', tone: 'warning', strength: null,
       reason: 'Signal health reduced',
       category: 'reduced-health',
-      matchedRule: `health < 100% (health=${healthPctStr})`,
+      matchedRule: `health < 100% (health=${healthPctStr}${persistedStr})`,
     };
   }
   if (nativeAccepted > t.nativeStrong && functionalAccepted < t.functionalCheap) {
@@ -1460,15 +1472,16 @@ async function refresh() {
       // Health must persist degraded for HEALTH_CONFIRM_SECONDS before it's trusted as a
       // real Caution — a single-tick blip shows "Data Pending" instead, which the mock
       // wallet treats as hold-current-position (same as Hold/Neutral), not a sell signal.
-      const isHealthPending = resolveHealthPending(regimeInputs.healthBps, regimeInputs.isHealthy, regimeInputs.isStale);
+      const { pending: isHealthPending, elapsedSeconds: healthDegradedSeconds } =
+        resolveHealthPending(regimeInputs.healthBps, regimeInputs.isHealthy, regimeInputs.isStale);
       const classified = isHealthPending
         ? {
             label: 'Data Pending', tone: 'pending', strength: null,
             reason: 'Health reading unstable — confirming',
             category: 'data-pending',
-            matchedRule: `health degraded <${HEALTH_CONFIRM_SECONDS}s so far (health=${(regimeInputs.healthBps/100).toFixed(0)}%) — not yet trusted`,
+            matchedRule: `health degraded ${healthDegradedSeconds.toFixed(0)}s of ${HEALTH_CONFIRM_SECONDS}s so far (health=${(regimeInputs.healthBps/100).toFixed(0)}%) — not yet trusted`,
           }
-        : classifyCoreAccessRegime(regimeInputs);
+        : classifyCoreAccessRegime({ ...regimeInputs, healthDegradedSeconds });
 
       // Attach the exact inputs this classification was made from, so that whichever
       // object ends up displayed (fresh `raw` or an older `regimeDisplayed` still
