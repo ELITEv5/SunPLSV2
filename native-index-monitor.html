@@ -536,7 +536,7 @@
   </div>
 </div>
 <div class="card" style="margin-bottom:12px">
-  <div class="clabel" style="margin-bottom:10px">Simulated Trades <span class="dim" style="text-transform:none;font-size:10px">(0.30% simulated fee/slippage per trade; buys only on confirmed Buy/Favorable Access, sells only on genuine Caution — never on staleness alone; requires 2 confirmed update() events + 24h min hold)</span></div>
+  <div class="clabel" style="margin-bottom:10px">Simulated Trades <span class="dim" style="text-transform:none;font-size:10px">(0.30% simulated fee/slippage per trade; buys on confirmed Buy/Favorable Access or Hold/Constructive, sells only on genuine Caution — never on staleness alone or a Data Pending blip; requires 2 confirmed update() events + 24h min hold)</span></div>
   <table>
     <thead>
       <tr><th>Time</th><th>Action</th><th>PLS Price</th><th>Triggered by</th><th>Value After</th></tr>
@@ -704,15 +704,30 @@ const STALE_HARD_SECONDS  = 72 * 3600;   // 3 days — well beyond "busy day," t
 // that, show "Data Pending" — an honest "signal isn't stable enough to call yet" state
 // that the wallet treats as hold-current-position, same as Hold/Neutral.
 const HEALTH_CONFIRM_SECONDS = 90; // ~3 ticks at the 30s refresh cadence
-let healthDegradedSince = null; // ms timestamp health first read <100%, reset whenever it reads 100%
+
+// Persisted (not just in-memory) — otherwise closing/reopening the tab while health is
+// genuinely mid-degradation restarts the 90s grace clock from zero, and a real sustained
+// problem could read as "still just Data Pending" indefinitely if you happen to reload
+// while it's already bad. ms timestamp health first read <100%; cleared whenever it reads
+// 100% (or the tab has never seen a degraded reading yet).
+const HEALTH_PENDING_KEY = 'sunpls_health_degraded_since_v1';
+let healthDegradedSince = (() => {
+  const v = localStorage.getItem(HEALTH_PENDING_KEY);
+  return v ? +v : null;
+})();
+function _setHealthDegradedSince(v) {
+  healthDegradedSince = v;
+  if (v === null) localStorage.removeItem(HEALTH_PENDING_KEY);
+  else localStorage.setItem(HEALTH_PENDING_KEY, String(v));
+}
 
 // Hard-stale (STALE_HARD_SECONDS+, no update() at all) is excluded — that's a slow,
 // unambiguous signal, not the kind of blip this gate exists for.
 function resolveHealthPending(healthBps, isHealthy, isStale) {
-  if (isStale) { healthDegradedSince = null; return false; }
+  if (isStale) { _setHealthDegradedSince(null); return false; }
   const degradedNow = isHealthy === false || (healthBps != null && healthBps < 10000);
-  if (!degradedNow) { healthDegradedSince = null; return false; }
-  if (healthDegradedSince === null) healthDegradedSince = Date.now();
+  if (!degradedNow) { _setHealthDegradedSince(null); return false; }
+  if (healthDegradedSince === null) _setHealthDegradedSince(Date.now());
   return (Date.now() - healthDegradedSince) / 1000 < HEALTH_CONFIRM_SECONDS;
 }
 
@@ -914,12 +929,19 @@ function initMockWallet(priceUsd) {
 }
 
 // Returns true (want PLS), false (want cash), or null (no opinion — hold current position).
+// 'hold-constructive' counts as wanting PLS, same as 'buy': it's "native strength with
+// near-neutral access" — the same thesis as Buy, just short of the stricter threshold —
+// not a neutral state. Originally excluded, which meant exiting to cash had 4 trigger
+// categories but re-entering had only 1, a much narrower gate than the one it takes to
+// leave. That asymmetry left the wallet stuck in cash for 18+ days through a sustained
+// PLS rally after a single Caution exit (see observation log, mid-2026: Caution/Data
+// Pending dominated readings, so two consecutive clean 'buy' reads rarely lined up).
 function desiredWalletPosition(category, emaAgeS) {
-  if (category === 'buy') return true;
+  if (category === 'buy' || category === 'hold-constructive') return true;
   if (category === 'expensive-function' || category === 'weak-native-expensive-access' ||
       category === 'unhealthy' || category === 'reduced-health') return false;
   if (category === 'stale') return emaAgeS > MOCK_WALLET_STALE_SELL_SECONDS ? false : null;
-  return null; // hold-constructive, neutral — keep current position
+  return null; // neutral, data-pending — keep current position
 }
 
 // isNewUpdateEvent: true only when a real on-chain update() has landed since the last tick
