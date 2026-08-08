@@ -492,6 +492,18 @@
   </table>
 </div>
 
+<!-- ── Manipulation Cost (live) ── -->
+<div class="section-label" style="margin-top:4px">Manipulation Cost &nbsp;·&nbsp; <span style="color:var(--muted)">live, per route — capital to move raw market access 1 percentage point</span></div>
+<div class="card" style="margin-bottom:12px">
+  <table>
+    <thead>
+      <tr><th>Route</th><th>WPLS needed</th><th>Notional (USD)</th><th>Est. attack cost</th></tr>
+    </thead>
+    <tbody id="manip-cost-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+  </table>
+  <div class="footer" id="manip-cost-footer" style="margin-top:12px;margin-bottom:0"></div>
+</div>
+
 <!-- ── Core Access Regime (analytics only) ── -->
 <div class="section-label" style="margin-top:4px">Core Access Regime &nbsp;·&nbsp; <span style="color:var(--muted)">Native × Functional v3, analytics only</span></div>
 <div class="card accent-border" style="margin-bottom:12px">
@@ -658,6 +670,11 @@ const FUNC_EMA_ABI = [
   'function smoothedGasPrice() view returns (uint256)',
   'function gasEmaAlphaBps() view returns (uint16)',
   'function gasSnapshot() view returns (uint256 smoothed, uint256 raw, uint256 initial, uint256 smoothedComponent, uint256 rawComponent)',
+  // v4-only — used for the live Manipulation Cost display.
+  'function marketRouteCount() view returns (uint256)',
+  'function reserveEmaAlphaBps() view returns (uint16)',
+  'function route(uint8 kind, uint256 i) view returns (bytes32 symbol, address pair, address tokenIn, uint256 tradeSizeIn, uint256 initialSlippage, uint256 currentSlippage, uint256 initialRouteWplsDepth, uint256 currentRouteWplsDepth)',
+  'function routeReserveSnapshot(uint8 kind, uint256 i) view returns (uint256 smoothedReserveIn, uint256 smoothedReserveOut, uint256 rawReserveIn, uint256 rawReserveOut, uint256 smoothedSlippage, uint256 rawSlippage)',
 ];
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
@@ -1125,6 +1142,36 @@ function renderObsLog() {
   }
 }
 
+// ── Manipulation Cost (live) — same math as the one-time manual security analysis ──
+// that motivated the v4 fix (~$257 / 6.41B WPLS at the time), now computed fresh every
+// refresh instead of going stale as pool depth drifts. Models an attacker injecting
+// WPLS into a route's LIVE/raw reserves to shift that route's raw market-access
+// slippage ratio by MANIP_TARGET_DELTA (1 percentage point) — the cheaper, favorable
+// direction (lower slippage), matching the exact attack vector originally quantified.
+const MANIP_TARGET_DELTA   = 0.01; // 1 percentage point of the slippage ratio
+const MANIP_SWAP_FEE_BPS   = 29;   // PulseX 0.29% per leg, round-trip = 2x this
+const MANIP_FLASH_FEE_BPS  = 9;    // typical flash-loan fee, ~0.09%
+
+// slippage = tradeSizeIn / (reserveIn + tradeSizeIn) — inverted to solve for the WPLS
+// injection needed to hit a target slippage ratio. Returns null if the route is already
+// so cheap that a full percentage-point move would require slippage <= 0 (formula
+// breaks down; treat as "not meaningfully computable right now", not zero-cost).
+function wplsToShiftSlippage(rawReserveIn, tradeSizeIn, initialSlippage, currentSlippage) {
+  const currentRatio = currentSlippage / initialSlippage;
+  const targetRatio   = currentRatio - MANIP_TARGET_DELTA;
+  if (targetRatio <= 0) return null;
+  const targetSlippage    = targetRatio * initialSlippage;
+  const requiredReserveIn = tradeSizeIn / targetSlippage;
+  const delta = requiredReserveIn - rawReserveIn - tradeSizeIn;
+  return delta > 0 ? delta : null;
+}
+
+function estimateAttackCostUsd(wplsNeeded, plsPriceUsd) {
+  const notionalUsd = wplsNeeded * plsPriceUsd;
+  const roundTripFeePct = (MANIP_SWAP_FEE_BPS * 2 + MANIP_FLASH_FEE_BPS) / 10000;
+  return { notionalUsd, costUsd: notionalUsd * roundTripFeePct };
+}
+
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
 const fWPLS = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(6) + ' WPLS';
@@ -1451,6 +1498,46 @@ async function refresh() {
               `${diff>=0?'EMA decay lag: +':'EMA absorbing spike: +'}${Math.abs(diff).toFixed(3)}%` +
             `</span>` +
           `</td>`;
+      }
+
+      // ── Manipulation Cost (live) ──────────────────────────────────────────
+      {
+        const routeCount = (await functionalEMAC.marketRouteCount()).toNumber();
+        const alphaBps   = await functionalEMAC.reserveEmaAlphaBps();
+        const rows = [];
+        for (let i = 0; i < routeCount; i++) {
+          const [r, snap] = await Promise.all([
+            functionalEMAC.route(0, i),               // RouteKind.MarketAccess = 0
+            functionalEMAC.routeReserveSnapshot(0, i),
+          ]);
+          const symbol         = b32s(r.symbol);
+          const tradeSizeIn    = +ethers.utils.formatUnits(r.tradeSizeIn, 18);
+          const initialSlip    = +ethers.utils.formatUnits(r.initialSlippage, 18);
+          const rawReserveIn   = +ethers.utils.formatUnits(snap.rawReserveIn, 18);
+          const rawSlippage    = +ethers.utils.formatUnits(snap.rawSlippage, 18);
+          const wplsNeeded = wplsToShiftSlippage(rawReserveIn, tradeSizeIn, initialSlip, rawSlippage);
+          rows.push({ symbol, wplsNeeded });
+        }
+        const tbody = document.getElementById('manip-cost-body');
+        if (tbody) {
+          tbody.innerHTML = '';
+          for (const row of rows) {
+            const tr = document.createElement('tr');
+            if (row.wplsNeeded === null) {
+              tr.innerHTML = `<td><b>${row.symbol}</b></td><td class="dim" colspan="3">Not currently computable (route already at/near zero slippage)</td>`;
+            } else {
+              const { notionalUsd, costUsd } = estimateAttackCostUsd(row.wplsNeeded, plsPriceUsd);
+              tr.innerHTML =
+                `<td><b>${row.symbol}</b></td>` +
+                `<td>${row.wplsNeeded.toLocaleString(undefined, {maximumFractionDigits:0})} WPLS</td>` +
+                `<td>$${notionalUsd.toLocaleString(undefined, {maximumFractionDigits:0})}</td>` +
+                `<td>$${costUsd.toLocaleString(undefined, {maximumFractionDigits:2})} <span class="dim" style="font-size:11px">(${((MANIP_SWAP_FEE_BPS*2+MANIP_FLASH_FEE_BPS)/100).toFixed(2)}% round-trip)</span></td>`;
+            }
+            tbody.appendChild(tr);
+          }
+          document.getElementById('manip-cost-footer').textContent =
+            `Raw (live, unsmoothed) pool reserves — the actual manipulable surface. Thanks to EMA reserve-smoothing (${(alphaBps/100).toFixed(0)}% alpha), a single-block move here only shifts the policy-relevant accepted index by ~${(alphaBps/100).toFixed(0)}% of its raw size, not the full amount.`;
+        }
       }
 
       // ── Core Access Regime (analytics only) ──────────────────────────────
