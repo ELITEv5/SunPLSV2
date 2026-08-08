@@ -493,11 +493,11 @@
 </div>
 
 <!-- ── Manipulation Cost (live) ── -->
-<div class="section-label" style="margin-top:4px">Manipulation Cost &nbsp;·&nbsp; <span style="color:var(--muted)">live, per route — capital to move raw market access 1 percentage point</span></div>
+<div class="section-label" style="margin-top:4px">Manipulation Cost &nbsp;·&nbsp; <span style="color:var(--muted)">live — capital to move the ACCEPTED v4 index, per route</span></div>
 <div class="card" style="margin-bottom:12px">
   <table>
     <thead>
-      <tr><th>Route</th><th>WPLS needed</th><th>Notional (USD)</th><th>Est. attack cost</th></tr>
+      <tr><th>Route</th><th>Move accepted 1bp</th><th>Move accepted 10bp</th><th>Move accepted 100bp (full cap)</th></tr>
     </thead>
     <tbody id="manip-cost-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
   </table>
@@ -1142,28 +1142,67 @@ function renderObsLog() {
   }
 }
 
-// ── Manipulation Cost (live) — same math as the one-time manual security analysis ──
-// that motivated the v4 fix (~$257 / 6.41B WPLS at the time), now computed fresh every
-// refresh instead of going stale as pool depth drifts. Models an attacker injecting
-// WPLS into a route's LIVE/raw reserves to shift that route's raw market-access
-// slippage ratio by MANIP_TARGET_DELTA (1 percentage point) — the cheaper, favorable
-// direction (lower slippage), matching the exact attack vector originally quantified.
-const MANIP_TARGET_DELTA   = 0.01; // 1 percentage point of the slippage ratio
-const MANIP_SWAP_FEE_BPS   = 29;   // PulseX 0.29% per leg, round-trip = 2x this
-const MANIP_FLASH_FEE_BPS  = 9;    // typical flash-loan fee, ~0.09%
+// ── Manipulation Cost (live) — policy-relevant version ────────────────────────
+// v1 of this panel (see roadmap doc history) showed cost to move ONE route's RAW
+// slippage ratio by 1pt in a single block — real, but three steps removed from
+// anything policy-relevant (per-route not composite, raw not EMA-smoothed/capped,
+// one block not what a real update() produces). This version walks the EXACT same
+// forward chain the contract itself runs — inject WPLS -> EMA-blend into the
+// smoothed reserve -> recompute the composite raw index -> apply the 1%-of-previous
+// cap — and solves (numerically, same bisection technique as the original manual
+// security analysis) for how much WPLS a single manipulated update() needs to move
+// the ACTUAL ACCEPTED v4 index by 1bp / 10bp / 100bp. 100bp = the full cap.
+//
+// Conservative simplification: models the injection's effect via THIS route's
+// market-access contribution only, holding blockspace/liquidity-depth/other-route
+// values fixed — the real attack is marginally cheaper, since the same injection
+// also shifts liquidity depth simultaneously (not modeled here). Only the
+// "inject WPLS, make access look cheaper" direction is modeled — the opposite
+// direction (make it look expensive) requires acquiring PLSX/INC instead of WPLS,
+// a different and generally harder capital profile, not computed here.
+const MANIP_SWAP_FEE_BPS  = 29; // PulseX 0.29% per leg, round-trip = 2x this
+const MANIP_FLASH_FEE_BPS = 9;  // typical flash-loan fee, ~0.09%
+const MANIP_BP_TIERS = [
+  { bp: 0.0001, label: '1bp'   },
+  { bp: 0.001,  label: '10bp'  },
+  { bp: 0.01,   label: '100bp' }, // == the oracle's own 1%-per-update cap
+];
+const V4_WEIGHTS_BPS = { blockspace: 2000, marketAccess: 4000, liquidityDepth: 4000 }; // matches deployed v4
 
-// slippage = tradeSizeIn / (reserveIn + tradeSizeIn) — inverted to solve for the WPLS
-// injection needed to hit a target slippage ratio. Returns null if the route is already
-// so cheap that a full percentage-point move would require slippage <= 0 (formula
-// breaks down; treat as "not meaningfully computable right now", not zero-cost).
-function wplsToShiftSlippage(rawReserveIn, tradeSizeIn, initialSlippage, currentSlippage) {
-  const currentRatio = currentSlippage / initialSlippage;
-  const targetRatio   = currentRatio - MANIP_TARGET_DELTA;
-  if (targetRatio <= 0) return null;
-  const targetSlippage    = targetRatio * initialSlippage;
-  const requiredReserveIn = tradeSizeIn / targetSlippage;
-  const delta = requiredReserveIn - rawReserveIn - tradeSizeIn;
-  return delta > 0 ? delta : null;
+function wplsToMoveAcceptedIndex({
+  targetBp, rawReserveIn, tradeSizeIn, initialSlippage, smoothedReserveIn,
+  otherRoutesRatioSum, numRoutes, blockspaceComponent, liquidityDepthComponent,
+  reserveEmaAlphaBps, previousAccepted, maxMoveBps,
+}) {
+  const alpha = reserveEmaAlphaBps / 10000;
+  const w = V4_WEIGHTS_BPS;
+
+  function rawIndexFor(injectedWpls) {
+    const liveReserveIn = rawReserveIn + injectedWpls;
+    const newSmoothed = alpha * liveReserveIn + (1 - alpha) * smoothedReserveIn;
+    const newSlippage = tradeSizeIn / (newSmoothed + tradeSizeIn);
+    const newRatio = newSlippage / initialSlippage;
+    const avgMarket = (newRatio + otherRoutesRatioSum) / numRoutes;
+    return (w.blockspace * blockspaceComponent + w.marketAccess * avgMarket + w.liquidityDepth * liquidityDepthComponent) / 10000;
+  }
+  function acceptedAfter(injectedWpls) {
+    const rawIndex = rawIndexFor(injectedWpls);
+    const maxMove = previousAccepted * maxMoveBps / 10000;
+    return Math.max(previousAccepted - maxMove, Math.min(previousAccepted + maxMove, rawIndex));
+  }
+
+  const targetAccepted = previousAccepted * (1 - targetBp); // relative — matches the contract's own cap semantics
+  // Organic conditions can already be moving this direction faster than the target bp
+  // (e.g. market access + liquidity depth both falling this update) — in that case the
+  // marginal cost of "achieving" the move via injection is genuinely zero, not a bug.
+  if (acceptedAfter(0) <= targetAccepted) return 0;
+  let lo = 0, hi = 1e15;
+  if (acceptedAfter(hi) > targetAccepted) return null; // not reachable via this route alone
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    if (acceptedAfter(mid) > targetAccepted) lo = mid; else hi = mid;
+  }
+  return hi;
 }
 
 function estimateAttackCostUsd(wplsNeeded, plsPriceUsd) {
@@ -1500,43 +1539,61 @@ async function refresh() {
           `</td>`;
       }
 
-      // ── Manipulation Cost (live) ──────────────────────────────────────────
+      // ── Manipulation Cost (live) — cost to move the ACCEPTED v4 index ────
       {
         const routeCount = (await functionalEMAC.marketRouteCount()).toNumber();
         const alphaBps   = await functionalEMAC.reserveEmaAlphaBps();
-        const rows = [];
+        const previousAccepted        = +ethers.utils.formatUnits(emaAccepted, 18);
+        const blockspaceComponent     = +ethers.utils.formatUnits(emaComponents.blockspaceComponent, 18);
+        const liquidityDepthComponent = +ethers.utils.formatUnits(emaComponents.liquidityDepthComponent, 18);
+
+        // Need every route's current (smoothed) ratio up front, to compute each route's
+        // "other routes held fixed" sum when solving for that route's injection.
+        const routeData = [];
         for (let i = 0; i < routeCount; i++) {
           const [r, snap] = await Promise.all([
             functionalEMAC.route(0, i),               // RouteKind.MarketAccess = 0
             functionalEMAC.routeReserveSnapshot(0, i),
           ]);
-          const symbol         = b32s(r.symbol);
-          const tradeSizeIn    = +ethers.utils.formatUnits(r.tradeSizeIn, 18);
-          const initialSlip    = +ethers.utils.formatUnits(r.initialSlippage, 18);
-          const rawReserveIn   = +ethers.utils.formatUnits(snap.rawReserveIn, 18);
-          const rawSlippage    = +ethers.utils.formatUnits(snap.rawSlippage, 18);
-          const wplsNeeded = wplsToShiftSlippage(rawReserveIn, tradeSizeIn, initialSlip, rawSlippage);
-          rows.push({ symbol, wplsNeeded });
+          routeData.push({
+            symbol:            b32s(r.symbol),
+            tradeSizeIn:       +ethers.utils.formatUnits(r.tradeSizeIn, 18),
+            initialSlippage:   +ethers.utils.formatUnits(r.initialSlippage, 18),
+            currentSlippage:   +ethers.utils.formatUnits(r.currentSlippage, 18), // smoothed
+            rawReserveIn:      +ethers.utils.formatUnits(snap.rawReserveIn, 18),
+            smoothedReserveIn: +ethers.utils.formatUnits(snap.smoothedReserveIn, 18),
+          });
         }
+
         const tbody = document.getElementById('manip-cost-body');
         if (tbody) {
           tbody.innerHTML = '';
-          for (const row of rows) {
+          for (let i = 0; i < routeData.length; i++) {
+            const route = routeData[i];
+            const otherRoutesRatioSum = routeData.reduce(
+              (sum, r, j) => j === i ? sum : sum + (r.currentSlippage / r.initialSlippage), 0
+            );
+            const cells = MANIP_BP_TIERS.map(tier => {
+              const wplsNeeded = wplsToMoveAcceptedIndex({
+                targetBp: tier.bp,
+                rawReserveIn: route.rawReserveIn, tradeSizeIn: route.tradeSizeIn,
+                initialSlippage: route.initialSlippage, smoothedReserveIn: route.smoothedReserveIn,
+                otherRoutesRatioSum, numRoutes: routeData.length,
+                blockspaceComponent, liquidityDepthComponent,
+                reserveEmaAlphaBps: alphaBps, previousAccepted, maxMoveBps: 100, // matches MAX_INDEX_MOVE_BPS
+              });
+              if (wplsNeeded === null) return `<td class="dim">n/a</td>`;
+              if (wplsNeeded === 0) return `<td><span style="color:var(--yellow)">Already moving this way</span><br><span class="dim" style="font-size:11px">organic conditions exceed this target, no manipulation needed</span></td>`;
+              const { costUsd } = estimateAttackCostUsd(wplsNeeded, plsPriceUsd);
+              return `<td>${wplsNeeded.toLocaleString(undefined, {maximumFractionDigits:0})} WPLS`
+                + `<br><span class="dim" style="font-size:11px">$${costUsd.toLocaleString(undefined, {maximumFractionDigits:2})} attack cost</span></td>`;
+            });
             const tr = document.createElement('tr');
-            if (row.wplsNeeded === null) {
-              tr.innerHTML = `<td><b>${row.symbol}</b></td><td class="dim" colspan="3">Not currently computable (route already at/near zero slippage)</td>`;
-            } else {
-              const { notionalUsd, costUsd } = estimateAttackCostUsd(row.wplsNeeded, plsPriceUsd);
-              tr.innerHTML =
-                `<td><b>${row.symbol}</b></td>` +
-                `<td>${row.wplsNeeded.toLocaleString(undefined, {maximumFractionDigits:0})} WPLS</td>` +
-                `<td>$${notionalUsd.toLocaleString(undefined, {maximumFractionDigits:0})}</td>` +
-                `<td>$${costUsd.toLocaleString(undefined, {maximumFractionDigits:2})} <span class="dim" style="font-size:11px">(${((MANIP_SWAP_FEE_BPS*2+MANIP_FLASH_FEE_BPS)/100).toFixed(2)}% round-trip)</span></td>`;
-            }
+            tr.innerHTML = `<td><b>${route.symbol}</b></td>` + cells.join('');
             tbody.appendChild(tr);
           }
           document.getElementById('manip-cost-footer').textContent =
-            `Raw (live, unsmoothed) pool reserves — the actual manipulable surface. Thanks to EMA reserve-smoothing (${(alphaBps/100).toFixed(0)}% alpha), a single-block move here only shifts the policy-relevant accepted index by ~${(alphaBps/100).toFixed(0)}% of its raw size, not the full amount.`;
+            `Cost to move the ACCEPTED v4 index itself (not just a route's raw slippage) via a single manipulated update() — accounts for the ${(alphaBps/100).toFixed(0)}% EMA reserve-smoothing and the 1%-per-update cap. Conservative: market-access-only, ignores the simultaneous liquidity-depth effect the same injection also causes (the real attack is marginally cheaper). A consumer requiring 2 confirmed updates (e.g. the mock wallet) would need this repeated on a second consecutive real update to actually act on it.`;
         }
       }
 
