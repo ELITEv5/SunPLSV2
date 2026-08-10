@@ -1576,8 +1576,14 @@ async function refresh() {
     const sysHealthPct = noDebt ? '∞' : (+sysHealth / 100).toFixed(2) + '%';
     const debtFmt   = parseFloat(ethers.utils.formatUnits(totalDebt,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
     const collFmt   = parseFloat(ethers.utils.formatUnits(totalColl,  18)).toLocaleString(undefined, {maximumFractionDigits:2});
-    const ceilFmt   = parseFloat(ethers.utils.formatUnits(ceiling,    18)).toLocaleString(undefined, {maximumFractionDigits:0});
-    const utilPct   = noDebt ? '0.00%' : (+ethers.utils.formatUnits(totalDebt,18) / +ethers.utils.formatUnits(ceiling,18) * 100).toFixed(2) + '%';
+    // Vault's ceiling schedule (see source): 100B SunPLS for the first 30 days post-deploy,
+    // then exactly type(uint256).max — deliberately "unlimited," 150% CR is the real safety
+    // net from then on. Not a real number to format; show it as what it actually means.
+    const isUnlimitedCeiling = ceiling.eq(ethers.constants.MaxUint256);
+    const ceilFmt   = isUnlimitedCeiling ? 'Unlimited (150% CR is the real cap)'
+      : parseFloat(ethers.utils.formatUnits(ceiling, 18)).toLocaleString(undefined, {maximumFractionDigits:0});
+    const utilPct   = isUnlimitedCeiling ? 'N/A (no ceiling)'
+      : noDebt ? '0.00%' : (+ethers.utils.formatUnits(totalDebt,18) / +ethers.utils.formatUnits(ceiling,18) * 100).toFixed(2) + '%';
     const badDebtN  = +ethers.utils.formatUnits(badDebt,  18);
     const surplusN  = +ethers.utils.formatUnits(surplus,  18);
     const healthCls = noDebt ? 'up' : +sysHealth > 15000 ? 'up' : +sysHealth > 12000 ? 'warn' : 'down';
@@ -1586,7 +1592,7 @@ async function refresh() {
       kv('System CR',       sysHealthPct, healthCls) +
       kv('Total debt',      debtFmt + ' SunPLS') +
       kv('Total collateral',collFmt + ' WPLS') +
-      kv('Debt ceiling',    ceilFmt + ' SunPLS') +
+      kv('Debt ceiling',    isUnlimitedCeiling ? ceilFmt : ceilFmt + ' SunPLS') +
       kv('Ceiling utilisation', utilPct) +
       kv('Surplus buffer',  surplusN.toFixed(4) + ' SunPLS', surplusN > 0 ? 'up' : 'dim') +
       kv('Bad debt',        badDebtN.toFixed(4) + ' SunPLS', badDebtN > 0 ? 'down' : 'dim');
