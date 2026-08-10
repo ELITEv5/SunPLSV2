@@ -617,14 +617,15 @@
 <div class="section-label" style="margin-top:4px">Redemption Risk &nbsp;·&nbsp; <span style="color:var(--muted)">live — the other half of the attack model: how much could actually be extracted</span></div>
 <div class="card" style="margin-bottom:12px">
   <div id="redemption-risk-inputs"></div>
-  <div class="clabel" style="margin-top:16px;margin-bottom:10px">Stress Scenarios <span class="dim" style="text-transform:none;font-size:10px">(hypothetical distressed debt × R-P gap — real attack cost held constant, only the extraction side is hypothetical)</span></div>
+  <div class="clabel" style="margin-top:16px;margin-bottom:10px">Stress Scenarios <span class="dim" style="text-transform:none;font-size:10px">(hypothetical distressed debt × R-P gap — real attack cost held constant; extractable value shown in WPLS, the protocol's native risk unit, and in USD at current PLS/USD)</span></div>
   <table>
     <thead>
       <tr><th>Distressed debt</th><th>0.1% R-P gap</th><th>0.5% R-P gap</th><th>1% R-P gap</th></tr>
     </thead>
     <tbody id="redemption-stress-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
   </table>
-  <div class="footer" id="redemption-risk-footer" style="margin-top:12px;margin-bottom:0"></div>
+  <div class="footer" id="redemption-stress-price-note" style="margin-top:10px;margin-bottom:0"></div>
+  <div class="footer" id="redemption-risk-footer" style="margin-top:6px;margin-bottom:0"></div>
 </div>
 
 <!-- ── Core Access Regime (analytics only) ── -->
@@ -2040,23 +2041,33 @@ async function refresh() {
         // Hypothetical distressed-debt x R-P-gap grid, using the SAME real attack cost
         // (cheapestHundredBp) as the numerator throughout — only the extraction side is
         // hypothetical here, the cost side stays real.
-        const stressDebtTiers = [10000, 100000, 1000000];   // SunPLS
-        const stressGapTiers  = [0.001, 0.005, 0.01];        // 0.1%, 0.5%, 1% of R
+        // Extended per feedback: risk is fundamentally WPLS-denominated (R, P, and
+        // redemption itself are all WPLS terms) — USD is a derived, secondary lens that
+        // makes small numbers look stranger than they are given how tiny PLS/USD
+        // currently is. Show both, and extend tiers up toward plausible future scale —
+        // the small tiers alone made the safety margin look permanent rather than a
+        // function of today's tiny supply/price.
+        const stressDebtTiers = [10000, 100000, 1000000, 100000000, 1000000000, 10000000000]; // SunPLS
+        const stressGapTiers  = [0.001, 0.005, 0.01];  // 0.1%, 0.5%, 1% of R
         const stressTbody = document.getElementById('redemption-stress-body');
         if (stressTbody && cheapestHundredBp != null) {
           stressTbody.innerHTML = '';
           for (const debtTier of stressDebtTiers) {
             const cells = stressGapTiers.map(gapFrac => {
-              const extractableUsd = debtTier * gapFrac * Rn * plsPriceUsd;
+              const extractableWpls = debtTier * gapFrac * Rn;
+              const extractableUsd  = extractableWpls * plsPriceUsd;
               const ratio = extractableUsd > 0 ? cheapestHundredBp / extractableUsd : Infinity;
               const cls = ratio >= 1 ? 'up' : 'down';
               return `<td class="${cls}">${ratio === Infinity ? '∞' : ratio.toFixed(2) + 'x'}`
-                + `<br><span class="dim" style="font-size:11px">$${fUsdAdaptive(extractableUsd)} extractable</span></td>`;
+                + `<br><span class="dim" style="font-size:11px">${extractableWpls.toLocaleString(undefined,{maximumFractionDigits:2})} WPLS</span>`
+                + `<br><span class="dim" style="font-size:11px">$${fUsdAdaptive(extractableUsd)} at current PLS/USD</span></td>`;
             });
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><b>${debtTier.toLocaleString()} SunPLS</b></td>` + cells.join('');
             stressTbody.appendChild(tr);
           }
+          document.getElementById('redemption-stress-price-note').textContent =
+            `Priced at today's live PLS/USD ($${plsPriceUsd.toFixed(8)}) — this ratio scales down directly if PLS/USD rises; it is not a permanent safety margin, only today's.`;
         } else if (stressTbody) {
           stressTbody.innerHTML = '<tr><td colspan="4" class="dim">Attack cost not currently computable — see Manipulation Cost panel above.</td></tr>';
         }
