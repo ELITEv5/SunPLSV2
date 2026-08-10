@@ -539,6 +539,13 @@
 <div class="section-label" style="margin-top:4px">Redemption Risk &nbsp;·&nbsp; <span style="color:var(--muted)">live — the other half of the attack model: how much could actually be extracted</span></div>
 <div class="card" style="margin-bottom:12px">
   <div id="redemption-risk-inputs"></div>
+  <div class="clabel" style="margin-top:16px;margin-bottom:10px">Stress Scenarios <span class="dim" style="text-transform:none;font-size:10px">(hypothetical distressed debt × R-P gap — real attack cost held constant, only the extraction side is hypothetical)</span></div>
+  <table>
+    <thead>
+      <tr><th>Distressed debt</th><th>0.1% R-P gap</th><th>0.5% R-P gap</th><th>1% R-P gap</th></tr>
+    </thead>
+    <tbody id="redemption-stress-body"><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+  </table>
   <div class="footer" id="redemption-risk-footer" style="margin-top:12px;margin-bottom:0"></div>
 </div>
 
@@ -1317,6 +1324,14 @@ function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
 const fWPLS = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(6) + ' WPLS';
+// PLS/USD is ~$0.000008 — plain toLocaleString(maximumFractionDigits:0) rounds genuine
+// sub-cent values to a misleading "$0". Scale precision to the magnitude instead.
+const fUsdAdaptive = usd => {
+  if (usd === 0) return '0.00';
+  if (usd >= 1) return usd.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (usd >= 0.01) return usd.toFixed(4);
+  return usd.toFixed(8);
+};
 const fPct  = (cur, ref) => {
   const c = +ethers.utils.formatUnits(cur, 18), r = +ethers.utils.formatUnits(ref, 18);
   if (!r) return { s: '—', cls: 'dim' };
@@ -1935,6 +1950,33 @@ async function refresh() {
           kv('Cheapest 100bp attack cost (from panel above)', cheapestHundredBp != null ? '$' + cheapestHundredBp.toLocaleString(undefined, {maximumFractionDigits: 2}) : 'n/a') +
           kv('Safety ratio (attack cost / max extractable)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : (maxExtractableUsd === 0 ? '∞ (nothing extractable right now)' : 'n/a'),
              safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'dim');
+
+        // Stress scenarios — today's protocol is nearly empty (1 vault, ~$0 extractable),
+        // so the live safety ratio alone doesn't show where the model actually breaks.
+        // Hypothetical distressed-debt x R-P-gap grid, using the SAME real attack cost
+        // (cheapestHundredBp) as the numerator throughout — only the extraction side is
+        // hypothetical here, the cost side stays real.
+        const stressDebtTiers = [10000, 100000, 1000000];   // SunPLS
+        const stressGapTiers  = [0.001, 0.005, 0.01];        // 0.1%, 0.5%, 1% of R
+        const stressTbody = document.getElementById('redemption-stress-body');
+        if (stressTbody && cheapestHundredBp != null) {
+          stressTbody.innerHTML = '';
+          for (const debtTier of stressDebtTiers) {
+            const cells = stressGapTiers.map(gapFrac => {
+              const extractableUsd = debtTier * gapFrac * Rn * plsPriceUsd;
+              const ratio = extractableUsd > 0 ? cheapestHundredBp / extractableUsd : Infinity;
+              const cls = ratio >= 1 ? 'up' : 'down';
+              return `<td class="${cls}">${ratio === Infinity ? '∞' : ratio.toFixed(2) + 'x'}`
+                + `<br><span class="dim" style="font-size:11px">$${fUsdAdaptive(extractableUsd)} extractable</span></td>`;
+            });
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><b>${debtTier.toLocaleString()} SunPLS</b></td>` + cells.join('');
+            stressTbody.appendChild(tr);
+          }
+        } else if (stressTbody) {
+          stressTbody.innerHTML = '<tr><td colspan="4" class="dim">Attack cost not currently computable — see Manipulation Cost panel above.</td></tr>';
+        }
+
         document.getElementById('redemption-risk-footer').textContent =
           `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}.`;
       }
