@@ -606,10 +606,13 @@
   <div id="sim-inputs"></div>
   <div class="footer" style="margin-top:12px;margin-bottom:0">
     Transmission function: capped(index − 1.0) bias, max <span id="sim-cap-label">0.25%/day</span>, requires health = 100% and
-    <span id="sim-confirm-label">3</span> consecutive same-direction confirmed updates. Same gating applied identically to both
-    hypothetical scenarios — native-direct differs from v4-bias only in which index drives the bias, not in the safety rails.
-    Replayed over the real observation log (not synthetic data) — shows shape of drift starting from today's live R, not a literal
-    historical reconstruction (this dashboard doesn't have historical R aligned to observation timestamps).
+    <span id="sim-confirm-label">3</span> consecutive same-direction confirmed updates. Health/persistence gating applied
+    identically to both hypothetical scenarios — native-direct differs from v4-bias only in which index drives the bias.
+    v4-bias additionally throttles its daily cap by the live Redemption Risk safety ratio (&gt;10x full, 3-10x ×0.5,
+    1-3x ×0.1, &lt;1x frozen) — native-direct does not get this throttle, since it's the rejected-design comparison
+    case, not something this safety rail exists to protect. Replayed over the real observation log (not synthetic
+    data) — shows shape of drift starting from today's live R, not a literal historical reconstruction (this
+    dashboard doesn't have historical R aligned to observation timestamps).
   </div>
 </div>
 
@@ -1811,6 +1814,50 @@ async function refresh() {
         }
       }
 
+      // ── Redemption Risk — live data (moved ahead of the Controller Simulator so it can
+      // apply the safety-ratio throttle below; rendering of this panel happens later, but
+      // the numbers themselves need to exist before the simulator runs). ────────────────
+      // redeem() only pays out against vaults already at CR<=130% (verified in source,
+      // see roadmap Phase 5a) — so "how much could an attacker extract" is bounded by
+      // distressed debt actually sitting in the protocol right now, not by total TVL.
+      const vaultCountN = (await vaultC.vaultCount()).toNumber();
+      let distressedDebtWpls = 0, redeemableVaults = 0;
+      for (let i = 0; i < vaultCountN; i++) {
+        const owner = await vaultC.vaultOwners(i);
+        const v = await vaultC.getVault(owner);
+        const debtN = +ethers.utils.formatUnits(v.debt, 18);
+        const collateralN = +ethers.utils.formatUnits(v.collateral, 18);
+        if (v.redeemable && debtN > 0) {
+          redeemableVaults++;
+          const RnForVault = +ethers.utils.formatUnits(R, 18);
+          // Same cap the contract itself applies: wplsOut = min(repayAmount*R, collateral) —
+          // beyond collateral/R, redeeming more SunPLS yields no additional WPLS.
+          distressedDebtWpls += Math.min(debtN, collateralN / RnForVault);
+        }
+      }
+      const redemptionRn = +ethers.utils.formatUnits(R, 18);
+      const redemptionPn = +ethers.utils.formatUnits(P, 18);
+      const redemptionOpportunity = redemptionRn > redemptionPn; // profitable direction: buy SunPLS at P, redeem at R
+      const maxExtractableWpls = redemptionOpportunity ? distressedDebtWpls * (redemptionRn - redemptionPn) : 0;
+      const maxExtractableUsd  = maxExtractableWpls * plsPriceUsd;
+      const cheapestHundredBp  = cheapestHundredBpCostUsd; // one source of truth, from the Manipulation Cost block above
+      const safetyRatio = maxExtractableUsd > 0 && cheapestHundredBp != null
+        ? cheapestHundredBp / maxExtractableUsd : null;
+
+      // Safety-ratio throttle for the Controller Simulator's v4-bias scenario, per the
+      // agreed policy rule: >10x full influence, 3-10x reduced, 1-3x minimal, <1x frozen.
+      // Only applies to v4-bias — native-direct is the rejected-design comparison case and
+      // isn't something we're trying to protect, so it stays at the plain unthrottled cap.
+      // safetyRatio === null means "nothing extractable" (infinitely safe) -> full influence.
+      function safetyThrottleMultiplier(ratio) {
+        if (ratio === null) return { mult: 1, tier: 'Full (nothing extractable)' };
+        if (ratio > 10) return { mult: 1,    tier: 'Full (>10x)' };
+        if (ratio >= 3) return { mult: 0.5,  tier: 'Reduced (3x-10x)' };
+        if (ratio >= 1) return { mult: 0.1,  tier: 'Minimal (1x-3x)' };
+        return { mult: 0, tier: 'Frozen (<1x)' };
+      }
+      const throttle = safetyThrottleMultiplier(safetyRatio);
+
       // ── Core Access Regime (analytics only) ──────────────────────────────
       // isStale = HARD stale (3+ days, no update() at all) — forces Caution, same as a real
       // health fault. isAging = informational only (updates are manual, ~1-3x/day expected;
@@ -1960,7 +2007,11 @@ async function refresh() {
         const currentR = +ethers.utils.formatUnits(R, 18);
         const baseline    = simulateController({ observations: simObs, mode: 'baseline' });
         const nativeDirect = simulateController({ observations: simObs, mode: 'native-direct' });
-        const v4Bias       = simulateController({ observations: simObs, mode: 'v4-bias' });
+        // Redemption safety-ratio throttle applied ONLY to v4-bias — native-direct is the
+        // rejected-design comparison case, not something this throttle exists to protect.
+        const v4Bias = simulateController({
+          observations: simObs, mode: 'v4-bias', dailyBiasCap: SIM_DAILY_BIAS_CAP * throttle.mult,
+        });
 
         const lastBias = arr => arr.length ? arr[arr.length - 1].bias : 1.0;
         const renderScenario = (idPrefix, biasArr, label) => {
@@ -1980,61 +2031,34 @@ async function refresh() {
         document.getElementById('sim-cap-label').textContent = (SIM_DAILY_BIAS_CAP * 100).toFixed(2) + '%/day';
         document.getElementById('sim-confirm-label').textContent = SIM_CONFIRM_UPDATES;
 
+        document.getElementById('sim-v4-meta').innerHTML +=
+          tag(`Redemption safety throttle: ${throttle.tier}${throttle.mult < 1 ? ` (cap ×${throttle.mult})` : ''}`,
+              throttle.mult === 1 ? 'ok' : throttle.mult === 0 ? 'bad' : 'warn');
+
         document.getElementById('sim-inputs').innerHTML =
           kv('Observations replayed', simObs.length.toLocaleString()) +
           kv('Current live R', fWPLS(R)) +
           kv('Native-direct final drift', ((lastBias(nativeDirect)-1)*100).toFixed(4) + '%') +
           kv('v4-bias final drift',       ((lastBias(v4Bias)-1)*100).toFixed(4) + '%') +
           kv('Divergence (native-direct − v4-bias)', (((lastBias(nativeDirect)-lastBias(v4Bias)))*100).toFixed(4) + ' points',
-             Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim');
+             Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim') +
+          kv('Redemption safety ratio (drives the throttle above)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : '∞ (nothing extractable)',
+             safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'up');
       }
 
-      // ── Redemption Risk / Extraction Estimate — the other half of the attack model ──
-      // redeem() only pays out against vaults already at CR<=130% (verified in source,
-      // see roadmap Phase 5a) — so "how much could an attacker extract" is bounded by
-      // distressed debt actually sitting in the protocol right now, not by total TVL.
+      // ── Redemption Risk / Extraction Estimate — rendering only (all numbers already
+      // computed above, before the Controller Simulator, so it could apply the throttle) ──
       {
-        const vaultCountN = (await vaultC.vaultCount()).toNumber();
-        let distressedDebtWpls = 0, totalDebtWpls = 0, redeemableVaults = 0;
-        for (let i = 0; i < vaultCountN; i++) {
-          const owner = await vaultC.vaultOwners(i);
-          const v = await vaultC.getVault(owner);
-          const debtN = +ethers.utils.formatUnits(v.debt, 18);
-          const collateralN = +ethers.utils.formatUnits(v.collateral, 18);
-          totalDebtWpls += debtN;
-          if (v.redeemable && debtN > 0) {
-            redeemableVaults++;
-            const Rn = +ethers.utils.formatUnits(R, 18);
-            // Same cap the contract itself applies: wplsOut = min(repayAmount*R, collateral) —
-            // beyond collateral/R, redeeming more SunPLS yields no additional WPLS.
-            distressedDebtWpls += Math.min(debtN, collateralN / Rn);
-          }
-        }
-
-        const Rn = +ethers.utils.formatUnits(R, 18);
-        const Pn = +ethers.utils.formatUnits(P, 18);
-        const redemptionOpportunity = Rn > Pn; // profitable direction: buy SunPLS at P, redeem at R
-        const maxExtractableWpls = redemptionOpportunity ? distressedDebtWpls * (Rn - Pn) : 0;
-        const maxExtractableUsd = maxExtractableWpls * plsPriceUsd;
-
-        // Safety ratio vs the cheapest route's 100bp (full cap) attack cost — the most an
-        // attacker could achieve in a single manipulated update — captured earlier in the
-        // Manipulation Cost panel's own computation (see cheapestHundredBpCostUsd) rather
-        // than recomputed here, so there's exactly one source of truth for that number.
-        const cheapestHundredBp = cheapestHundredBpCostUsd;
-
-        const safetyRatio = maxExtractableUsd > 0 && cheapestHundredBp != null
-          ? cheapestHundredBp / maxExtractableUsd : null;
-
         document.getElementById('redemption-risk-inputs').innerHTML =
           kv('Vaults total / redeemable (CR≤130%)', `${vaultCountN} / ${redeemableVaults}`) +
           kv('Distressed debt available for redemption', distressedDebtWpls.toFixed(4) + ' SunPLS') +
-          kv('Current R / P', `${Rn.toFixed(6)} / ${Pn.toFixed(6)} WPLS`) +
+          kv('Current R / P', `${redemptionRn.toFixed(6)} / ${redemptionPn.toFixed(6)} WPLS`) +
           kv('Redemption opportunity (P < R)', redemptionOpportunity ? 'Yes — R above market' : 'No — R at/below market', redemptionOpportunity ? 'warn' : 'up') +
           kv('Max extractable value (all redeemable vaults)', '$' + maxExtractableUsd.toLocaleString(undefined, {maximumFractionDigits: 2})) +
           kv('Cheapest 100bp attack cost (from panel above)', cheapestHundredBp != null ? '$' + cheapestHundredBp.toLocaleString(undefined, {maximumFractionDigits: 2}) : 'n/a') +
           kv('Safety ratio (attack cost / max extractable)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : (maxExtractableUsd === 0 ? '∞ (nothing extractable right now)' : 'n/a'),
-             safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'dim');
+             safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'dim') +
+          kv('Controller Simulator throttle (see below)', throttle.tier);
 
         // Stress scenarios — today's protocol is nearly empty (1 vault, ~$0 extractable),
         // so the live safety ratio alone doesn't show where the model actually breaks.
@@ -2054,7 +2078,7 @@ async function refresh() {
           stressTbody.innerHTML = '';
           for (const debtTier of stressDebtTiers) {
             const cells = stressGapTiers.map(gapFrac => {
-              const extractableWpls = debtTier * gapFrac * Rn;
+              const extractableWpls = debtTier * gapFrac * redemptionRn;
               const extractableUsd  = extractableWpls * plsPriceUsd;
               const ratio = extractableUsd > 0 ? cheapestHundredBp / extractableUsd : Infinity;
               const cls = ratio >= 1 ? 'up' : 'down';
@@ -2073,7 +2097,7 @@ async function refresh() {
         }
 
         document.getElementById('redemption-risk-footer').textContent =
-          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}.`;
+          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}. This same ratio now directly throttles the Controller Simulator's v4-bias scenario above.`;
       }
     }
 
