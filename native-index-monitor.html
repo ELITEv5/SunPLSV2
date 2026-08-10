@@ -218,9 +218,12 @@
     </div>
 
     <p class="tagline">
-      This page is a live theoretical test — running two new purchasing power oracles alongside
-      the deployed SunPLS protocol to see if they could work together one day.
-      No code has changed. Nothing is wired into the controller yet. We are just watching the data.
+      This page started as a live theoretical test — two new purchasing power oracles running
+      alongside the deployed SunPLS protocol. It's grown into a full research dashboard: a regime
+      classifier, a paper-trading backtest, a live attack-cost model, and a controller simulator,
+      all built to answer one question honestly before anything touches real monetary policy.
+      No code has changed on the live protocol. Nothing is wired into the controller yet.
+      We are watching the data — and now, modeling what would happen if we did.
     </p>
 
     <div class="modal-section">
@@ -288,6 +291,71 @@
     </div>
 
     <div class="modal-section">
+      <h3>Core Access Regime</h3>
+      <p>
+        A Buy / Hold / Caution classifier built on top of the two functional oracles —
+        <b>analytics only</b>, not policy. Compares Native (asset heat) against Functional v4
+        (access cost) against four threshold rules, each carrying a <b>Mild/Strong</b> qualifier
+        based on how far past the threshold a reading actually sits — "0.9965x" and "0.954x"
+        used to look identical on screen; now they don't.
+      </p>
+      <p style="margin-top:10px">
+        Health must read degraded continuously for <b>90 seconds</b> before a health-driven
+        Caution is trusted — the live oracle's health can blip on a single tick, and a real
+        sustained problem looks different from a moment of refresh-state noise. Below that
+        threshold the panel shows <b>Data Pending</b> instead: an honest "not confirmed yet,"
+        never an instant flip to alarm.
+      </p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Mock Wallet &amp; Observation Log</h3>
+      <p>
+        A simulated $1,000 paper-trading backtest of the regime signal, priced against the
+        real on-chain PulseX WPLS/DAI pair. Buys and sells only on a <b>confirmed</b> signal —
+        2 consecutive real <code>update()</code> events plus a 24-hour minimum hold — never on
+        staleness or a health blip alone. An earlier version could exit easily but only
+        re-enter on a much narrower condition; caught in the live data (an 18-day stretch stuck
+        in cash through a rally) and fixed.
+      </p>
+      <p style="margin-top:10px">
+        Every real <code>update()</code> also writes one row to the <b>Observation Log</b> —
+        native, functional, health, regime, and PLS price at that moment. This is the actual
+        dataset the whole page exists to build, growing at roughly 1-3 rows a day.
+      </p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Manipulation Cost &amp; Redemption Risk</h3>
+      <p>
+        Two panels answering the security question directly, live, from the deployed contracts'
+        real reserves — not a one-time estimate that goes stale. <b>Manipulation Cost</b>: how
+        much would it cost to move v4's accepted index by 1bp / 10bp / 100bp, per route.
+        <b>Redemption Risk</b>: even if someone did, how much could actually be extracted?
+        SunPLS's <code>redeem()</code> only pays out against vaults already undercollateralized
+        (CR ≤ 130%, verified directly in the Vault source) — so extractable value is bounded by
+        how much distressed debt is sitting in the protocol at that moment, not by total TVL.
+        A <b>Stress Scenarios</b> grid shows hypothetical distressed-debt × price-gap
+        combinations, since today's protocol (currently one vault) is too small to exercise the
+        real numbers.
+      </p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Controller Simulator</h3>
+      <p>
+        The actual question this page exists to answer: <b>if v4 had policy influence, which
+        direction would R drift?</b> Replays the real Observation Log — not synthetic data —
+        through three transmission models starting from today's live R: no index influence,
+        native-direct tracking (the design we rejected, kept only as the comparison case), and
+        v4 slow bias — <code>capped(index − 1.0)</code>, max 0.25%/day, requires health = 100%
+        and 3 consecutive confirmed updates in the same direction. Writes nothing on-chain.
+        Purely hypothetical — and it already shows native-direct chasing asset appreciation
+        while v4-bias stays anchored, in real accumulated data.
+      </p>
+    </div>
+
+    <div class="modal-section">
       <h3>The Hypothesis</h3>
       <p>
         What if <b>R tracked functional purchasing power?</b> As PulseChain grows — more chain usage,
@@ -308,22 +376,32 @@
       <h3>What we're watching</h3>
       <ul>
         <li>Do both indices move in ways that are <b>economically meaningful</b> — tracking real PulseChain conditions rather than noise?</li>
-        <li>Do the two indices <b>agree or diverge</b>? Persistent divergence tells us something important about what each one actually measures.</li>
+        <li>Do the two indices <b>agree or diverge</b>? Persistent divergence tells us something important about what each one actually measures — confirmed live: native ripping while v4 stays near par, repeatedly.</li>
         <li>Does the <b>P / Native R</b> ratio stay close to 100%? That would mean the market would naturally find equilibrium under this regime.</li>
         <li>Does the functional index give <b>different information</b> than the asset basket — or is it just a noisier version of the same signal?</li>
         <li>Are borrowers and holders <b>not destabilised</b> by slow, capped index movement?</li>
+        <li>Does the <b>Mock Wallet</b> actually outperform buy-and-hold, now that the entry/exit asymmetry is fixed? Still an open, unanswered question — the old number no longer applies, and there's no new verdict yet.</li>
+        <li>Does the <b>Manipulation Cost / Redemption Risk</b> safety margin hold as the protocol grows, or only because today's deployment is nearly empty?</li>
       </ul>
     </div>
 
     <div class="modal-section">
-      <h3>What success looks like</h3>
+      <h3>What success looks like — and where this actually stands</h3>
       <p>
         Over weeks and months both indices drift slowly and meaningfully. P / Native R stays
         close to par. The functional index provides signal that the asset basket misses.
-        The health overlay behaves correctly under stress. If that holds,
-        <b>Controller v2</b> wires one or both indices in as a parallel deploy alongside the live protocol.
-        SunPLS becomes the first CDP asset with a monetary policy set by the chain it lives on —
-        not by a dollar peg, not by token prices, but by <b>what the chain can do</b>.
+        The health overlay behaves correctly under stress. So far, live data backs all of this up.
+      </p>
+      <p style="margin-top:10px">
+        That's necessary, not sufficient. Before anything gets wired into a real Controller v2:
+        a historical backtest (not just live accumulation going forward), a finished transmission
+        design (the Controller Simulator answers "what would happen," not yet "what should the
+        exact cap be"), and evidence the manipulation-cost/redemption-risk safety margin holds at
+        real scale, not just on a nearly-empty test deployment. If all of that holds,
+        <b>Controller v2</b> wires v4 in as a parallel deploy alongside the live protocol —
+        never a mutation of it. SunPLS becomes the first CDP asset with a monetary policy set by
+        the chain it lives on — not by a dollar peg, not by token prices, but by
+        <b>what the chain can do</b>.
       </p>
     </div>
 
