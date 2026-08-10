@@ -535,6 +535,13 @@
   </div>
 </div>
 
+<!-- ── Redemption Risk / Extraction Estimate ── -->
+<div class="section-label" style="margin-top:4px">Redemption Risk &nbsp;·&nbsp; <span style="color:var(--muted)">live — the other half of the attack model: how much could actually be extracted</span></div>
+<div class="card" style="margin-bottom:12px">
+  <div id="redemption-risk-inputs"></div>
+  <div class="footer" id="redemption-risk-footer" style="margin-top:12px;margin-bottom:0"></div>
+</div>
+
 <!-- ── Core Access Regime (analytics only) ── -->
 <div class="section-label" style="margin-top:4px">Core Access Regime &nbsp;·&nbsp; <span style="color:var(--muted)">Native × Functional v3, analytics only</span></div>
 <div class="card accent-border" style="margin-bottom:12px">
@@ -687,6 +694,11 @@ const VAULT_ABI = [
   'function badDebtAccumulated() view returns (uint256)',
   'function effectiveCeiling() view returns (uint256)',
   'function systemHealth() view returns (uint256)',
+  // Redemption-risk panel — vault enumeration (only 1 vault exists on the live protocol
+  // today, verified on-chain, so this is cheap; would need batching if that changes).
+  'function vaultCount() view returns (uint256)',
+  'function vaultOwners(uint256) view returns (address)',
+  'function getVault(address) view returns (uint256 collateral, uint256 debt, uint256 crBps, bool liquidatable, bool redeemable, uint256 lastAccrual)',
 ];
 const FUNC_ABI = [
   'function peek() view returns (uint256 index, uint256 timestamp, uint256 healthBps)',
@@ -1631,6 +1643,11 @@ async function refresh() {
       }
 
       // ── Manipulation Cost (live) — cost to move the ACCEPTED v4 index ────
+      // cheapestHundredBpCostUsd is captured here (outer scope) and reused by the
+      // Redemption Risk panel's safety ratio below, instead of recomputing routeData
+      // twice — routeData/blockspaceComponent/etc. are intentionally block-scoped to
+      // this section and not meant to leak further than this one number.
+      let cheapestHundredBpCostUsd = null;
       {
         const routeCount = (await functionalEMAC.marketRouteCount()).toNumber();
         const alphaBps   = await functionalEMAC.reserveEmaAlphaBps();
@@ -1674,8 +1691,14 @@ async function refresh() {
                 reserveEmaAlphaBps: alphaBps, previousAccepted, maxMoveBps: 100, // matches MAX_INDEX_MOVE_BPS
               });
               if (wplsNeeded === null) return `<td class="dim">n/a</td>`;
-              if (wplsNeeded === 0) return `<td><span style="color:var(--yellow)">Already moving this way</span><br><span class="dim" style="font-size:11px">organic conditions exceed this target, no manipulation needed</span></td>`;
+              if (wplsNeeded === 0) {
+                if (tier.bp === 0.01) cheapestHundredBpCostUsd = 0;
+                return `<td><span style="color:var(--yellow)">Already moving this way</span><br><span class="dim" style="font-size:11px">organic conditions exceed this target, no manipulation needed</span></td>`;
+              }
               const { costUsd } = estimateAttackCostUsd(wplsNeeded, plsPriceUsd);
+              if (tier.bp === 0.01) {
+                cheapestHundredBpCostUsd = cheapestHundredBpCostUsd === null ? costUsd : Math.min(cheapestHundredBpCostUsd, costUsd);
+              }
               return `<td>${wplsNeeded.toLocaleString(undefined, {maximumFractionDigits:0})} WPLS`
                 + `<br><span class="dim" style="font-size:11px">$${costUsd.toLocaleString(undefined, {maximumFractionDigits:2})} attack cost</span></td>`;
             });
@@ -1864,6 +1887,56 @@ async function refresh() {
           kv('v4-bias final drift',       ((lastBias(v4Bias)-1)*100).toFixed(4) + '%') +
           kv('Divergence (native-direct − v4-bias)', (((lastBias(nativeDirect)-lastBias(v4Bias)))*100).toFixed(4) + ' points',
              Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim');
+      }
+
+      // ── Redemption Risk / Extraction Estimate — the other half of the attack model ──
+      // redeem() only pays out against vaults already at CR<=130% (verified in source,
+      // see roadmap Phase 5a) — so "how much could an attacker extract" is bounded by
+      // distressed debt actually sitting in the protocol right now, not by total TVL.
+      {
+        const vaultCountN = (await vaultC.vaultCount()).toNumber();
+        let distressedDebtWpls = 0, totalDebtWpls = 0, redeemableVaults = 0;
+        for (let i = 0; i < vaultCountN; i++) {
+          const owner = await vaultC.vaultOwners(i);
+          const v = await vaultC.getVault(owner);
+          const debtN = +ethers.utils.formatUnits(v.debt, 18);
+          const collateralN = +ethers.utils.formatUnits(v.collateral, 18);
+          totalDebtWpls += debtN;
+          if (v.redeemable && debtN > 0) {
+            redeemableVaults++;
+            const Rn = +ethers.utils.formatUnits(R, 18);
+            // Same cap the contract itself applies: wplsOut = min(repayAmount*R, collateral) —
+            // beyond collateral/R, redeeming more SunPLS yields no additional WPLS.
+            distressedDebtWpls += Math.min(debtN, collateralN / Rn);
+          }
+        }
+
+        const Rn = +ethers.utils.formatUnits(R, 18);
+        const Pn = +ethers.utils.formatUnits(P, 18);
+        const redemptionOpportunity = Rn > Pn; // profitable direction: buy SunPLS at P, redeem at R
+        const maxExtractableWpls = redemptionOpportunity ? distressedDebtWpls * (Rn - Pn) : 0;
+        const maxExtractableUsd = maxExtractableWpls * plsPriceUsd;
+
+        // Safety ratio vs the cheapest route's 100bp (full cap) attack cost — the most an
+        // attacker could achieve in a single manipulated update — captured earlier in the
+        // Manipulation Cost panel's own computation (see cheapestHundredBpCostUsd) rather
+        // than recomputed here, so there's exactly one source of truth for that number.
+        const cheapestHundredBp = cheapestHundredBpCostUsd;
+
+        const safetyRatio = maxExtractableUsd > 0 && cheapestHundredBp != null
+          ? cheapestHundredBp / maxExtractableUsd : null;
+
+        document.getElementById('redemption-risk-inputs').innerHTML =
+          kv('Vaults total / redeemable (CR≤130%)', `${vaultCountN} / ${redeemableVaults}`) +
+          kv('Distressed debt available for redemption', distressedDebtWpls.toFixed(4) + ' SunPLS') +
+          kv('Current R / P', `${Rn.toFixed(6)} / ${Pn.toFixed(6)} WPLS`) +
+          kv('Redemption opportunity (P < R)', redemptionOpportunity ? 'Yes — R above market' : 'No — R at/below market', redemptionOpportunity ? 'warn' : 'up') +
+          kv('Max extractable value (all redeemable vaults)', '$' + maxExtractableUsd.toLocaleString(undefined, {maximumFractionDigits: 2})) +
+          kv('Cheapest 100bp attack cost (from panel above)', cheapestHundredBp != null ? '$' + cheapestHundredBp.toLocaleString(undefined, {maximumFractionDigits: 2}) : 'n/a') +
+          kv('Safety ratio (attack cost / max extractable)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : (maxExtractableUsd === 0 ? '∞ (nothing extractable right now)' : 'n/a'),
+             safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'dim');
+        document.getElementById('redemption-risk-footer').textContent =
+          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}.`;
       }
     }
 
