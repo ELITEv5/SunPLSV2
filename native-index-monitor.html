@@ -504,6 +504,37 @@
   <div class="footer" id="manip-cost-footer" style="margin-top:12px;margin-bottom:0"></div>
 </div>
 
+<!-- ── Phase 5 Controller Simulator (hypothetical — never writes on-chain) ── -->
+<div class="section-label" style="margin-top:4px">Controller Simulator &nbsp;·&nbsp; <span style="color:var(--muted)">hypothetical — replays the real observation log, changes nothing on-chain</span></div>
+<div class="card accent-border" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">If v4 had policy influence, starting from today's R</div>
+  <div class="grid3" style="margin-bottom:12px">
+    <div class="card">
+      <div class="clabel">Baseline (no index influence)</div>
+      <div class="big" id="sim-baseline">—</div>
+      <div class="cmeta" id="sim-baseline-meta"></div>
+    </div>
+    <div class="card">
+      <div class="clabel">Native-direct tracking <span class="dim" style="text-transform:none;font-size:10px">(rejected design, shown for comparison)</span></div>
+      <div class="big" id="sim-native">—</div>
+      <div class="cmeta" id="sim-native-meta"></div>
+    </div>
+    <div class="card accent-border">
+      <div class="clabel">v4 slow bias <span class="dim" style="text-transform:none;font-size:10px">(proposed design)</span></div>
+      <div class="big" id="sim-v4">—</div>
+      <div class="cmeta" id="sim-v4-meta"></div>
+    </div>
+  </div>
+  <div id="sim-inputs"></div>
+  <div class="footer" style="margin-top:12px;margin-bottom:0">
+    Transmission function: capped(index − 1.0) bias, max <span id="sim-cap-label">0.25%/day</span>, requires health = 100% and
+    <span id="sim-confirm-label">3</span> consecutive same-direction confirmed updates. Same gating applied identically to both
+    hypothetical scenarios — native-direct differs from v4-bias only in which index drives the bias, not in the safety rails.
+    Replayed over the real observation log (not synthetic data) — shows shape of drift starting from today's live R, not a literal
+    historical reconstruction (this dashboard doesn't have historical R aligned to observation timestamps).
+  </div>
+</div>
+
 <!-- ── Core Access Regime (analytics only) ── -->
 <div class="section-label" style="margin-top:4px">Core Access Regime &nbsp;·&nbsp; <span style="color:var(--muted)">Native × Functional v3, analytics only</span></div>
 <div class="card accent-border" style="margin-bottom:12px">
@@ -1211,6 +1242,66 @@ function estimateAttackCostUsd(wplsNeeded, plsPriceUsd) {
   return { notionalUsd, costUsd: notionalUsd * roundTripFeePct };
 }
 
+// ── Phase 5 Controller Simulator — hypothetical only, NEVER writes anything on-chain ──
+// Replays the real observation log (the actual accumulated dataset, not synthetic data)
+// through three transmission models to answer: "if v4 had policy influence, how would R
+// have drifted?" Starting point is a common relative baseline (1.0), not literal historical
+// R reconstruction — this dashboard doesn't have historical R aligned to observation-log
+// timestamps, so it shows *shape of drift*, not "R was exactly this on this date."
+//
+// Transmission function (2026-08-09, agreed): capped(index - 1.0) bias on top of the
+// existing P/R controller, gated on health=100% and requiring the deviation to persist in
+// the same direction across SIM_CONFIRM_UPDATES consecutive real update() events — same
+// persistence pattern already proven in the mock wallet, generalized from discrete regime
+// categories to a continuous deviation direction.
+const SIM_DAILY_BIAS_CAP     = 0.0025; // 0.25%/day — conservative end of the agreed 0.25-0.50% range
+const SIM_CONFIRM_UPDATES    = 3;      // "2-3 accepted updates" — using the conservative end
+const SIM_REQUIRE_HEALTH_BPS = 10000;  // "requires health = 100%"
+
+// mode: 'baseline' (no index influence — isolates the existing P/R controller's own
+// behavior), 'native-direct' (naive design that was explicitly rejected — biases off
+// ecosystem heat directly, included ONLY as the comparison case Phase 5 argued against),
+// 'v4-bias' (the actual proposed design). native-direct and v4-bias share IDENTICAL
+// gating/persistence rules, differing only in which index drives the bias — an apples-to-
+// apples comparison, not a strawman with the safety rails removed from one side.
+function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_CAP }) {
+  let cumulativeBias = 1.0;
+  let pendingDirection = null, pendingCount = 0;
+  const trajectory = [];
+  let prevTime = observations.length ? observations[0].time : Date.now();
+
+  for (const obs of observations) {
+    const elapsedDays = Math.max(0, (obs.time - prevTime) / 86400000);
+    prevTime = obs.time;
+
+    if (mode === 'baseline') {
+      trajectory.push({ time: obs.time, bias: cumulativeBias });
+      continue;
+    }
+
+    const indexValue = mode === 'native-direct' ? obs.nativeAccepted : obs.functionalAccepted;
+    const deviation  = indexValue - 1.0;
+    const healthOk   = obs.healthBps >= SIM_REQUIRE_HEALTH_BPS;
+    const direction  = deviation > 0 ? 'up' : deviation < 0 ? 'down' : null;
+
+    if (!healthOk || direction === null) {
+      pendingDirection = null; pendingCount = 0;
+      trajectory.push({ time: obs.time, bias: cumulativeBias });
+      continue;
+    }
+    if (pendingDirection === direction) pendingCount++;
+    else { pendingDirection = direction; pendingCount = 1; }
+
+    if (pendingCount >= SIM_CONFIRM_UPDATES) {
+      const maxStep = dailyBiasCap * elapsedDays;
+      const step = Math.sign(deviation) * Math.min(Math.abs(deviation), maxStep);
+      cumulativeBias *= (1 + step);
+    }
+    trajectory.push({ time: obs.time, bias: cumulativeBias });
+  }
+  return trajectory;
+}
+
 // ── Formatting ────────────────────────────────────────────────────────────────
 const f18  = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(4) + 'x';
 const fWPLS = bn => parseFloat(ethers.utils.formatUnits(bn, 18)).toFixed(6) + ' WPLS';
@@ -1736,6 +1827,44 @@ async function refresh() {
         plsPriceUsd,
         oracleAddress:      ADDR.functionalEMA,
       });
+
+      // ── Phase 5 Controller Simulator — reads the real obsLog, writes nothing ──
+      {
+        const simObs = obsLog
+          .filter(o => o.nativeAccepted != null && o.functionalAccepted != null && o.healthBps != null)
+          .map(o => ({ time: o.time, nativeAccepted: o.nativeAccepted, functionalAccepted: o.functionalAccepted, healthBps: o.healthBps }));
+
+        const currentR = +ethers.utils.formatUnits(R, 18);
+        const baseline    = simulateController({ observations: simObs, mode: 'baseline' });
+        const nativeDirect = simulateController({ observations: simObs, mode: 'native-direct' });
+        const v4Bias       = simulateController({ observations: simObs, mode: 'v4-bias' });
+
+        const lastBias = arr => arr.length ? arr[arr.length - 1].bias : 1.0;
+        const renderScenario = (idPrefix, biasArr, label) => {
+          const bias = lastBias(biasArr);
+          const rHypothetical = currentR * bias;
+          const pct = (bias - 1) * 100;
+          const cls = Math.abs(pct) < 0.01 ? 'neutral' : pct > 0 ? 'up' : 'down';
+          document.getElementById(idPrefix).textContent = rHypothetical.toFixed(6) + ' WPLS';
+          document.getElementById(idPrefix).className   = 'big ' + cls;
+          document.getElementById(idPrefix + '-meta').innerHTML =
+            `<span class="${cls}">${pct >= 0 ? '+' : ''}${pct.toFixed(4)}% vs today's R</span>`;
+        };
+        renderScenario('sim-baseline', baseline, 'Baseline');
+        renderScenario('sim-native', nativeDirect, 'Native-direct');
+        renderScenario('sim-v4', v4Bias, 'v4-bias');
+
+        document.getElementById('sim-cap-label').textContent = (SIM_DAILY_BIAS_CAP * 100).toFixed(2) + '%/day';
+        document.getElementById('sim-confirm-label').textContent = SIM_CONFIRM_UPDATES;
+
+        document.getElementById('sim-inputs').innerHTML =
+          kv('Observations replayed', simObs.length.toLocaleString()) +
+          kv('Current live R', fWPLS(R)) +
+          kv('Native-direct final drift', ((lastBias(nativeDirect)-1)*100).toFixed(4) + '%') +
+          kv('v4-bias final drift',       ((lastBias(v4Bias)-1)*100).toFixed(4) + '%') +
+          kv('Divergence (native-direct − v4-bias)', (((lastBias(nativeDirect)-lastBias(v4Bias)))*100).toFixed(4) + ' points',
+             Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim');
+      }
     }
 
   } catch(e) {
