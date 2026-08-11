@@ -443,6 +443,30 @@
   <button class="about-btn" onclick="openModal()">What is this? ↗</button>
 </div>
 
+<!-- ── Policy Readiness — the TL;DR of everything below ── -->
+<div class="card accent-border" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px">Policy Readiness</div>
+  <div class="grid4" style="margin-bottom:12px">
+    <div>
+      <div class="clabel">V4 Oracle</div>
+      <div class="big" id="readiness-v4" style="font-size:20px">—</div>
+    </div>
+    <div>
+      <div class="clabel">Redemption Risk</div>
+      <div class="big" id="readiness-redemption" style="font-size:20px">—</div>
+    </div>
+    <div>
+      <div class="clabel">Controller Influence</div>
+      <div class="big" id="readiness-controller" style="font-size:20px">—</div>
+    </div>
+    <div>
+      <div class="clabel">Deployment Status</div>
+      <div class="big" id="readiness-deployment" style="font-size:20px; color: var(--yellow)">Research only</div>
+    </div>
+  </div>
+  <div class="footer" id="readiness-summary" style="margin-top:0;margin-bottom:0"></div>
+</div>
+
 <!-- ── Top metrics ── -->
 <div class="section-label">Native Index Oracle &nbsp;·&nbsp; 50% WPLS | 20% PLSX | 10% INC | 10% HEX | 10% gas</div>
 <div class="grid4" style="margin-bottom:12px">
@@ -1857,6 +1881,35 @@ async function refresh() {
         return { mult: 0, tier: 'Frozen (<1x)' };
       }
       const throttle = safetyThrottleMultiplier(safetyRatio);
+
+      // ── Policy Readiness — TL;DR rollup of values already computed above ──────
+      {
+        const v4Degraded = emaHealthy === false || emaHealthBps < 7000;
+        const v4Reduced  = !v4Degraded && emaHealthBps < 10000;
+        const v4Label = v4Degraded ? 'Degraded' : v4Reduced ? 'Monitoring' : 'Healthy';
+        const v4Cls   = v4Degraded ? 'down' : v4Reduced ? 'warn' : 'up';
+
+        const redemptionLabel = throttle.mult === 1 ? 'Safe' : throttle.mult > 0 ? 'Caution' : 'Unsafe';
+        const redemptionCls   = throttle.mult === 1 ? 'up' : throttle.mult > 0 ? 'warn' : 'down';
+
+        const controllerLabel = throttle.mult === 1 ? 'Full' : throttle.mult > 0 ? 'Throttled' : 'Frozen';
+        const controllerCls   = throttle.mult === 1 ? 'up' : throttle.mult > 0 ? 'warn' : 'down';
+
+        const setReadiness = (id, label, cls) => {
+          const el = document.getElementById(id);
+          el.textContent = label;
+          el.className = 'big ' + cls;
+          el.style.fontSize = '20px';
+        };
+        setReadiness('readiness-v4', v4Label, v4Cls);
+        setReadiness('readiness-redemption', redemptionLabel, redemptionCls);
+        setReadiness('readiness-controller', controllerLabel, controllerCls);
+
+        document.getElementById('readiness-summary').textContent =
+          `Research only: V4 ${v4Label.toLowerCase()}, redemption risk ${redemptionLabel.toLowerCase()}, ` +
+          `controller influence ${controllerLabel.toLowerCase()}, but policy deployment still requires a ` +
+          `longer historical backtest and a finished attack simulation before this becomes production policy.`;
+      }
 
       // ── Core Access Regime (analytics only) ──────────────────────────────
       // isStale = HARD stale (3+ days, no update() at all) — forces Caution, same as a real
