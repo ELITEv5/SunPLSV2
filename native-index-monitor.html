@@ -247,11 +247,14 @@
 
     <p class="tagline">
       This page started as a live theoretical test — two new purchasing power oracles running
-      alongside the deployed SunPLS protocol. It's grown into a full research dashboard: a regime
-      classifier, a paper-trading backtest, a live attack-cost model, and a controller simulator,
-      all built to answer one question honestly before anything touches real monetary policy.
-      No code has changed on the live protocol. Nothing is wired into the controller yet.
-      We are watching the data — and now, modeling what would happen if we did.
+      alongside the deployed SunPLS protocol. It's grown into a full research dashboard centered
+      on one question: can SunPLS carry functional purchasing power forward better than today's
+      R-only mechanism? A regime classifier, a live attack-cost and arbitrage model, and the
+      SunPLS Purchasing Power Simulator all exist to answer that honestly before anything touches
+      real monetary policy — a bonus PLS-timing backtest is included too, clearly marked as a
+      side experiment, not the thesis. No code has changed on the live protocol. Nothing is wired
+      into the controller yet. We are watching the data — and now, modeling what would happen if
+      we did.
     </p>
 
     <div class="modal-section">
@@ -2295,7 +2298,7 @@ async function refresh() {
           kv('Cheapest 100bp attack cost (from panel above)', cheapestHundredBp != null ? '$' + cheapestHundredBp.toLocaleString(undefined, {maximumFractionDigits: 2}) : 'n/a') +
           kv('Safety ratio (attack cost / max extractable)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : (maxExtractableUsd === 0 ? '∞ (nothing extractable right now)' : 'n/a'),
              safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'dim') +
-          kv('Controller Simulator throttle (see below)', throttle.tier);
+          kv('Purchasing Power Simulator throttle (see above)', throttle.tier);
 
         // Stress scenarios — today's protocol is nearly empty (1 vault, ~$0 extractable),
         // so the live safety ratio alone doesn't show where the model actually breaks.
@@ -2334,7 +2337,7 @@ async function refresh() {
         }
 
         document.getElementById('redemption-risk-footer').textContent =
-          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}. This same ratio now directly throttles the Controller Simulator's v4-bias scenario above.`;
+          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}. This same ratio now directly throttles the Purchasing Power Simulator's v4-bias scenario above.`;
       }
     }
 
