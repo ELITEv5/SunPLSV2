@@ -7,17 +7,26 @@
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     :root {
-      --bg: #0d0d0f;
-      --card: #13131a;
-      --border: #252535;
-      --text: #e2e2e8;
-      --muted: #82829a; /* was #5a5a72 — failed WCAG AA (2.76-2.90:1) against bg/card; this clears 4.5:1+ on both */
-      --green: #22c55e;
-      --red: #ef4444;
-      --yellow: #f59e0b;
-      --blue: #60a5fa;
-      --accent: #a78bfa;
-      --purple: #c084fc;
+      /* Light theme (2026-08-13) — replaces the original dark "terminal" palette per
+         reference mockups. Every text/border color below was chosen with a Python
+         relative-luminance check against BOTH --bg and --card (section-label/footer text
+         sits directly on --bg in several places, not just inside cards) — same WCAG AA
+         discipline as the earlier --muted dark-theme fix, this time aiming for >=5:1 on the
+         harder (bg) case rather than a bare pass, after that earlier fix landed too close to
+         the line once. The pastel rgba() tag/border tints used throughout the rest of this
+         stylesheet are hardcoded independently of these vars and were left unchanged — they
+         don't carry text and read fine as light tints on a light background. */
+      --bg: #f4f6fa;
+      --card: #ffffff;
+      --border: #e2e5ec;
+      --text: #10131c;
+      --muted: #475569;  /* slate-600 — 7.0:1 on --bg, 7.58:1 on --card */
+      --green: #166534;  /* green-800 — 6.59:1 / 7.13:1 */
+      --red: #b91c1c;    /* red-700 — 5.98:1 / 6.47:1 */
+      --yellow: #8a5a12; /* custom amber — 5.46:1 / 5.91:1 */
+      --blue: #1d4ed8;   /* blue-700 — 6.19:1 / 6.70:1 */
+      --accent: #6d28d9; /* violet-700 — 6.57:1 / 7.10:1 */
+      --purple: #7c3aed;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { overflow-x: hidden; }
@@ -45,8 +54,9 @@
     .grid4 > *, .grid3 > *, .grid2 > * { min-width: 0; }
 
     .card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
       max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
     }
     .card.accent-border { border-color: rgba(167,139,250,.3); }
     .card.blue-border   { border-color: rgba(96,165,250,.3); }
@@ -69,7 +79,7 @@
     .tag.p   { background: rgba(167,139,250,.1);color: var(--accent); border: 1px solid rgba(167,139,250,.25); }
     .tag.n   { background: rgba(90,90,114,.15); color: var(--muted); border: 1px solid rgba(90,90,114,.3); }
 
-    .kv { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(37,37,53,.7); font-size: 13px; flex-wrap: wrap; }
+    .kv { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(226,229,236,.8); font-size: 13px; flex-wrap: wrap; }
     .kv:last-child { border-bottom: none; }
     .kv .k { color: var(--muted); min-width: 0; overflow-wrap: break-word; }
     .kv .v { font-weight: bold; text-align: right; min-width: 0; overflow-wrap: break-word; }
@@ -85,7 +95,7 @@
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; font-size: 10px; color: var(--muted); text-transform: uppercase;
          letter-spacing: .06em; padding: 7px 10px; border-bottom: 1px solid var(--border); }
-    td { padding: 9px 10px; border-bottom: 1px solid rgba(37,37,53,.5); font-size: 12px; }
+    td { padding: 9px 10px; border-bottom: 1px solid rgba(226,229,236,.6); font-size: 12px; }
     tr:last-child td { border-bottom: none; }
     .up { color: var(--green); } .down { color: var(--red); } .dim { color: var(--muted); }
 
@@ -112,10 +122,10 @@
     }
     .modal-overlay.open { display: flex; }
     .modal {
-      background: #16161f; border: 1px solid rgba(167,139,250,.25);
+      background: #ffffff; border: 1px solid rgba(109,40,217,.2);
       border-radius: 14px; width: 100%; max-width: 720px;
       padding: 36px 36px 30px; position: relative;
-      box-shadow: 0 24px 80px rgba(0,0,0,.6);
+      box-shadow: 0 24px 80px rgba(16,19,28,.25);
       animation: modalIn .2s ease;
     }
     @keyframes modalIn { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
@@ -152,7 +162,7 @@
     }
     .modal-section p, .modal-section li {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 14px; color: #9999b8; line-height: 1.75;
+      font-size: 14px; color: var(--muted); line-height: 1.75;
     }
     .modal-section p + p { margin-top: 10px; }
     .modal-section b { color: var(--text); font-weight: 600; }
@@ -220,8 +230,8 @@
 
     <div class="modal-logo">
       <svg class="sun" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="18" cy="18" r="7" fill="#a78bfa" opacity=".9"/>
-        <g stroke="#a78bfa" stroke-width="2" stroke-linecap="round" opacity=".6">
+        <circle cx="18" cy="18" r="7" fill="#6d28d9" opacity=".9"/>
+        <g stroke="#6d28d9" stroke-width="2" stroke-linecap="round" opacity=".6">
           <line x1="18" y1="2"  x2="18" y2="7"/>
           <line x1="18" y1="29" x2="18" y2="34"/>
           <line x1="2"  y1="18" x2="7"  y2="18"/>
@@ -327,49 +337,62 @@
     </div>
 
     <div class="modal-section">
-      <h3>Mock Wallet &amp; Observation Log</h3>
+      <h3>Observation Log &amp; PLS Trading Signal Experiment</h3>
       <p>
-        A simulated $1,000 paper-trading backtest of the regime signal, priced against the
-        real on-chain PulseX WPLS/DAI pair. Buys and sells only on a <b>confirmed</b> signal —
-        2 consecutive real <code>update()</code> events plus a 24-hour minimum hold — never on
-        staleness or a health blip alone. An earlier version could exit easily but only
-        re-enter on a much narrower condition; caught in the live data (an 18-day stretch stuck
-        in cash through a rally) and fixed.
+        Every real <code>update()</code> writes one row to the <b>Observation Log</b> — native,
+        functional, health, regime, market price P, and PLS price at that moment. This is the
+        actual dataset the whole page exists to build, growing at roughly 1-3 rows a day.
       </p>
       <p style="margin-top:10px">
-        Every real <code>update()</code> also writes one row to the <b>Observation Log</b> —
-        native, functional, health, regime, and PLS price at that moment. This is the actual
-        dataset the whole page exists to build, growing at roughly 1-3 rows a day.
+        The <b>PLS Trading Signal Experiment</b> further down the page (clearly marked "Not
+        SunPLS policy") is a bonus paper-trading backtest of the regime signal, priced against
+        the real on-chain PulseX WPLS/DAI pair. It answers one narrow question — can the regime
+        signal time PLS entries/exits — which is a different question from the actual SunPLS
+        thesis (can SunPLS carry functional purchasing power forward). Buys and sells only on a
+        <b>confirmed</b> signal — 2 consecutive real <code>update()</code> events plus a 24-hour
+        minimum hold — never on staleness or a health blip alone; missing or degraded data is
+        never itself a sell signal, only a genuine bearish economic reading is. An earlier
+        version got this wrong (could exit easily but only re-enter on a much narrower
+        condition; caught in the live data as an 18-day stretch stuck in cash through a rally)
+        and was fixed.
       </p>
     </div>
 
     <div class="modal-section">
-      <h3>Manipulation Cost &amp; Redemption Risk</h3>
+      <h3>Manipulation Cost, Redemption Risk &amp; Arbitrage Opportunity</h3>
       <p>
-        Two panels answering the security question directly, live, from the deployed contracts'
-        real reserves — not a one-time estimate that goes stale. <b>Manipulation Cost</b>: how
-        much would it cost to move v4's accepted index by 1bp / 10bp / 100bp, per route.
-        <b>Redemption Risk</b>: even if someone did, how much could actually be extracted?
-        SunPLS's <code>redeem()</code> only pays out against vaults already undercollateralized
-        (CR ≤ 130%, verified directly in the Vault source) — so extractable value is bounded by
-        how much distressed debt is sitting in the protocol at that moment, not by total TVL.
-        A <b>Stress Scenarios</b> grid shows hypothetical distressed-debt × price-gap
-        combinations, since today's protocol (currently one vault) is too small to exercise the
-        real numbers.
+        Three panels answering the security and arbitrage questions directly, live, from the
+        deployed contracts' real reserves — not one-time estimates that go stale.
+        <b>Manipulation Cost</b>: how much would it cost to move v4's accepted index by
+        1bp / 10bp / 100bp, per route. <b>Redemption Risk</b>: even if someone did, how much
+        could actually be extracted? SunPLS's <code>redeem()</code> only pays out against vaults
+        already undercollateralized (CR ≤ 130%, verified directly in the Vault source) — so
+        extractable value is bounded by how much distressed debt is sitting in the protocol at
+        that moment, not by total TVL. A <b>Stress Scenarios</b> grid shows hypothetical
+        distressed-debt × price-gap combinations, since today's protocol (currently one vault)
+        is too small to exercise the real numbers. <b>Arbitrage Opportunity</b> makes explicit
+        what redemption risk alone doesn't say: no redemption edge (P ≥ R) does not mean no
+        arbitrage edge — when P &gt; R there's a separate, normal issuance/mint arb (mint SunPLS
+        against WPLS collateral, sell above R), which isn't an attack surface the way redemption
+        extraction is, since minting is CR-gated rather than bounded by distressed protocol debt.
       </p>
     </div>
 
     <div class="modal-section">
-      <h3>Controller Simulator</h3>
+      <h3>SunPLS Purchasing Power Simulator</h3>
       <p>
-        The actual question this page exists to answer: <b>if v4 had policy influence, which
-        direction would R drift?</b> Replays the real Observation Log — not synthetic data —
-        through three transmission models starting from today's live R: no index influence,
+        The actual question this page exists to answer: <b>can SunPLS carry functional
+        purchasing power forward better than today's R-only mechanism, or a naive native-index-
+        direct design?</b> Replays the real Observation Log — not synthetic data — through three
+        transmission models starting from today's live R: no index influence (baseline),
         native-direct tracking (the design we rejected, kept only as the comparison case), and
         v4 slow bias — <code>capped(index − 1.0)</code>, max 0.25%/day, requires health = 100%
         and 3 consecutive confirmed updates in the same direction. Writes nothing on-chain.
-        Purely hypothetical — and it already shows native-direct chasing asset appreciation
-        while v4-bias stays anchored, in real accumulated data.
+        Each scenario reports functional purchasing power retained, and whether its hypothetical
+        R would currently put the protocol under redemption pressure (P below R) or issuance
+        pressure (P above R) against today's live market price — historical P wasn't logged
+        before 2026-08-13, so this is evaluated against today's P, not a full historical replay
+        yet; new observations now record it so that becomes possible going forward.
       </p>
     </div>
 
@@ -398,8 +421,9 @@
         <li>Does the <b>P / Native R</b> ratio stay close to 100%? That would mean the market would naturally find equilibrium under this regime.</li>
         <li>Does the functional index give <b>different information</b> than the asset basket — or is it just a noisier version of the same signal?</li>
         <li>Are borrowers and holders <b>not destabilised</b> by slow, capped index movement?</li>
-        <li>Does the <b>Mock Wallet</b> actually outperform buy-and-hold, now that the entry/exit asymmetry is fixed? Still an open, unanswered question — the old number no longer applies, and there's no new verdict yet.</li>
+        <li>Does the <b>PLS Trading Signal Experiment</b> actually outperform buy-and-hold, now that the entry/exit asymmetry is fixed? Still an open, unanswered question — the old number no longer applies, and there's no new verdict yet. This is a side curiosity, not the thesis.</li>
         <li>Does the <b>Manipulation Cost / Redemption Risk</b> safety margin hold as the protocol grows, or only because today's deployment is nearly empty?</li>
+        <li>Does the <b>SunPLS Purchasing Power Simulator</b> show v4-bias actually retaining more functional purchasing power than baseline or native-direct, once there's enough replayed history to say so with confidence?</li>
       </ul>
     </div>
 
@@ -413,8 +437,8 @@
       <p style="margin-top:10px">
         That's necessary, not sufficient. Before anything gets wired into a real Controller v2:
         a historical backtest (not just live accumulation going forward), a finished transmission
-        design (the Controller Simulator answers "what would happen," not yet "what should the
-        exact cap be"), and evidence the manipulation-cost/redemption-risk safety margin holds at
+        design (the Purchasing Power Simulator answers "what would happen," not yet "what should
+        the exact cap be"), and evidence the manipulation-cost/redemption-risk safety margin holds at
         real scale, not just on a nearly-empty test deployment. If all of that holds,
         <b>Controller v2</b> wires v4 in as a parallel deploy alongside the live protocol —
         never a mutation of it. SunPLS becomes the first CDP asset with a monetary policy set by
@@ -441,8 +465,8 @@
 <div class="header-row">
   <div class="header-left">
     <svg class="header-sun" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="14" cy="14" r="5.5" fill="#a78bfa" opacity=".9"/>
-      <g stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round" opacity=".55">
+      <circle cx="14" cy="14" r="5.5" fill="#6d28d9" opacity=".9"/>
+      <g stroke="#6d28d9" stroke-width="1.6" stroke-linecap="round" opacity=".55">
         <line x1="14" y1="1.5" x2="14" y2="5.5"/>
         <line x1="14" y1="22.5" x2="14" y2="26.5"/>
         <line x1="1.5" y1="14" x2="5.5" y2="14"/>
@@ -624,25 +648,31 @@
   <div class="footer" id="manip-cost-footer" style="margin-top:12px;margin-bottom:0"></div>
 </div>
 
-<!-- ── Phase 5 Controller Simulator (hypothetical — never writes on-chain) ── -->
-<div class="section-label" style="margin-top:4px">Controller Simulator &nbsp;·&nbsp; <span style="color:var(--muted)">hypothetical — replays the real observation log, changes nothing on-chain</span></div>
+<!-- ── SunPLS Purchasing Power Simulator (hypothetical — never writes on-chain) ── -->
+<div class="section-label" style="margin-top:4px">SunPLS Purchasing Power Simulator &nbsp;·&nbsp; <span style="color:var(--muted)">hypothetical — replays the real observation log, changes nothing on-chain</span></div>
+<div class="footer" style="margin-bottom:10px">The actual research question, not a side one: can SunPLS carry functional purchasing power forward better than today's R-only mechanism (baseline), or a naive native-index-direct design (rejected)? This is that comparison — not a PLS trading tool.</div>
 <div class="card accent-border" style="margin-bottom:12px">
   <div class="clabel" style="margin-bottom:10px">If v4 had policy influence, starting from today's R</div>
+  <div class="clabel" style="margin-bottom:6px">Simulated R trend <span class="dim" style="text-transform:none;font-size:10px">(replayed observation index — dashed line = baseline/no influence)</span></div>
+  <div id="sim-chart-wrap" style="margin-bottom:14px"></div>
   <div class="grid3" style="margin-bottom:12px">
     <div class="card">
       <div class="clabel">Baseline (no index influence)</div>
       <div class="big" id="sim-baseline">—</div>
       <div class="cmeta" id="sim-baseline-meta"></div>
+      <div id="sim-baseline-extra" style="margin-top:6px"></div>
     </div>
     <div class="card">
       <div class="clabel">Native-direct tracking <span class="dim" style="text-transform:none;font-size:10px">(rejected design, shown for comparison)</span></div>
       <div class="big" id="sim-native">—</div>
       <div class="cmeta" id="sim-native-meta"></div>
+      <div id="sim-native-extra" style="margin-top:6px"></div>
     </div>
     <div class="card accent-border">
       <div class="clabel">v4 slow bias <span class="dim" style="text-transform:none;font-size:10px">(proposed design)</span></div>
       <div class="big" id="sim-v4">—</div>
       <div class="cmeta" id="sim-v4-meta"></div>
+      <div id="sim-v4-extra" style="margin-top:6px"></div>
     </div>
   </div>
   <div id="sim-inputs"></div>
@@ -653,13 +683,26 @@
     v4-bias additionally throttles its daily cap by the live Redemption Risk safety ratio (&gt;10x full, 3-10x ×0.5,
     1-3x ×0.1, &lt;1x frozen) — native-direct does not get this throttle, since it's the rejected-design comparison
     case, not something this safety rail exists to protect. Replayed over the real observation log (not synthetic
-    data) — shows shape of drift starting from today's live R, not a literal historical reconstruction (this
-    dashboard doesn't have historical R aligned to observation timestamps).
+    data) — shows shape of drift starting from today's live R, not a literal historical reconstruction. Redemption/
+    issuance pressure below is evaluated against <b>today's live market price P</b> (historical P wasn't logged
+    before 2026-08-13, so this can't yet be a true historical P/R replay — new observations now record P so this
+    becomes possible going forward).
   </div>
 </div>
 
+<!-- ── Arbitrage Opportunity Overview (redemption vs issuance, split explicitly) ── -->
+<div class="section-label" style="margin-top:4px">Arbitrage Opportunity &nbsp;·&nbsp; <span style="color:var(--muted)">live — what can actually be exploited right now, in either direction. No redemption edge does not mean no arbitrage edge.</span></div>
+<div class="card" style="margin-bottom:12px">
+  <div id="arb-overview-inputs"></div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card" id="arb-redemption-card" style="margin:0"></div>
+    <div class="card" id="arb-issuance-card" style="margin:0"></div>
+  </div>
+  <div class="footer" id="arb-overview-footer" style="margin-top:12px;margin-bottom:0"></div>
+</div>
+
 <!-- ── Redemption Risk / Extraction Estimate ── -->
-<div class="section-label" style="margin-top:4px">Redemption Risk &nbsp;·&nbsp; <span style="color:var(--muted)">live — the other half of the attack model: how much could actually be extracted</span></div>
+<div class="section-label" style="margin-top:4px">Redemption Risk &nbsp;·&nbsp; <span style="color:var(--muted)">live — redemption side only: bounded by distressed vaults actually sitting in the protocol. The issuance side above has no equivalent bound (see card).</span></div>
 <div class="card" style="margin-bottom:12px">
   <div id="redemption-risk-inputs"></div>
   <div class="clabel" style="margin-top:16px;margin-bottom:10px">Stress Scenarios <span class="dim" style="text-transform:none;font-size:10px">(hypothetical distressed debt × R-P gap — real attack cost held constant; extractable value shown in WPLS, the protocol's native risk unit, and in USD at current PLS/USD)</span></div>
@@ -697,22 +740,39 @@
   </table>
 </div>
 
-<!-- ── Mock Wallet — Regime Backtest (simulation only, no real funds) ── -->
-<div class="section-label" style="margin-top:4px">Mock Wallet — Regime Backtest &nbsp;·&nbsp; <span style="color:var(--muted)">simulated $1,000, priced off on-chain PulseX WPLS/DAI</span></div>
+<!-- ── Observation Log — the learning dataset ── -->
+<div class="section-label" style="margin-top:4px">Observation Log &nbsp;·&nbsp; <span style="color:var(--muted)">one row per your update() call — the dataset for judging whether this signal actually works</span></div>
+<div class="card" style="margin-bottom:12px">
+  <div class="clabel" style="margin-bottom:10px" id="obs-log-summary">Loading…</div>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Regime</th><th>Native</th><th>Functional v4</th><th>Health</th><th>PLS/USD</th></tr>
+    </thead>
+    <tbody id="obs-log-body"><tr><td colspan="6" class="dim">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ── PLS Trading Signal Experiment (demoted — a bonus toy testing "can the regime signal
+     time PLS," not the SunPLS thesis. Kept below the real research artifacts on purpose. ── -->
+<div class="section-label" style="margin-top:20px">PLS Trading Signal Experiment &nbsp;·&nbsp;
+  <span class="tag warn" style="text-transform:none;letter-spacing:normal;font-size:10px">Not SunPLS policy</span>
+  &nbsp;<span style="color:var(--muted)">bonus backtest of the regime signal's PLS-timing ability — simulated $1,000, priced off on-chain PulseX WPLS/DAI</span>
+</div>
+<div class="footer" style="margin-bottom:10px">This tests one narrow question — "can the Core Access Regime signal time entries/exits in PLS?" — which is a different question from the SunPLS thesis above (can SunPLS carry functional purchasing power forward). Treat it as a side experiment, not a policy signal.</div>
 <div class="grid3" style="margin-bottom:12px">
-  <div class="card accent-border">
+  <div class="card">
     <div class="clabel">Regime Strategy</div>
-    <div class="big" id="val-mock-strategy">—</div>
+    <div class="big" id="val-mock-strategy" style="font-size:22px">—</div>
     <div class="cmeta" id="meta-mock-strategy"></div>
   </div>
   <div class="card">
     <div class="clabel">Buy &amp; Hold Baseline</div>
-    <div class="big" id="val-mock-baseline">—</div>
+    <div class="big" id="val-mock-baseline" style="font-size:22px">—</div>
     <div class="cmeta" id="meta-mock-baseline"></div>
   </div>
   <div class="card">
     <div class="clabel">Alpha vs Baseline</div>
-    <div class="big" id="val-mock-alpha">—</div>
+    <div class="big" id="val-mock-alpha" style="font-size:22px">—</div>
     <div class="cmeta" id="meta-mock-alpha"></div>
   </div>
 </div>
@@ -729,18 +789,6 @@
     Simulated only — no real funds, no on-chain trades. Past/simulated performance is not indicative of future results. Analytics only, not financial advice.
     <button onclick="resetMockWallet()" style="margin-left:8px;padding:4px 10px;font-size:11px">Reset simulation</button>
   </div>
-</div>
-
-<!-- ── Observation Log — the learning dataset ── -->
-<div class="section-label" style="margin-top:4px">Observation Log &nbsp;·&nbsp; <span style="color:var(--muted)">one row per your update() call — the dataset for judging whether this signal actually works</span></div>
-<div class="card" style="margin-bottom:12px">
-  <div class="clabel" style="margin-bottom:10px" id="obs-log-summary">Loading…</div>
-  <table>
-    <thead>
-      <tr><th>Time</th><th>Regime</th><th>Native</th><th>Functional v4</th><th>Health</th><th>PLS/USD</th></tr>
-    </thead>
-    <tbody id="obs-log-body"><tr><td colspan="6" class="dim">Loading…</td></tr></tbody>
-  </table>
 </div>
 
 <!-- ── Actions ── -->
@@ -1088,12 +1136,14 @@ function renderRegimeHist() {
 //
 // Deliberately slower and narrower than the display panel:
 //  - Buys ONLY on category 'buy' (confirmed Buy / Favorable Access).
-//  - Sells ONLY on a *genuine* Caution: expensive function, weak-native/expensive-access,
-//    or a real health fault ('unhealthy' / 'reduced-health') — never on staleness alone.
-//  - A 'stale' reading holds the current position; the wallet only treats staleness as a
-//    sell signal once it's persisted well beyond the display's own 3-day threshold
-//    (MOCK_WALLET_STALE_SELL_SECONDS), i.e. genuinely unmaintained, not just "haven't
-//    updated today."
+//  - Sells ONLY on a *genuine bearish economic signal*: expensive function or
+//    weak-native/expensive-access. Missing or degraded *data* ('stale', 'unhealthy',
+//    'reduced-health') is never treated as bearish by itself — a broken/lagging oracle
+//    tells you nothing about direction, so it holds the current position and waits for
+//    a real reading instead of forcing an exit. (Earlier versions sold on 'unhealthy' /
+//    'reduced-health' directly and on sustained 'stale'; that conflated "we can't see"
+//    with "the signal is bad," which is a different failure mode from an actual bearish
+//    read and was corrected 2026-08-13.)
 //  - Any switch requires MOCK_CONFIRM_UPDATES consecutive *real* update() events agreeing
 //    on the new direction (not 30s UI polls — see isNewUpdateEvent) AND at least
 //    MOCK_MIN_HOLD_HOURS since the last simulated trade. Both gates must clear.
@@ -1102,7 +1152,6 @@ const MOCK_START_USD     = 1000;
 const MOCK_TRADE_FEE_BPS = 30;  // 0.30% simulated PulseX swap fee/slippage per trade
 const MOCK_MIN_HOLD_HOURS = 24; // minimum time between simulated trades
 const MOCK_CONFIRM_UPDATES = 2; // consecutive real update() events required to confirm a switch
-const MOCK_WALLET_STALE_SELL_SECONDS = 7 * 24 * 3600; // exit on staleness alone only after 7+ days unmaintained
 
 function loadMockWallet() {
   let w;
@@ -1141,10 +1190,8 @@ function initMockWallet(priceUsd) {
 // Pending dominated readings, so two consecutive clean 'buy' reads rarely lined up).
 function desiredWalletPosition(category, emaAgeS) {
   if (category === 'buy' || category === 'hold-constructive') return true;
-  if (category === 'expensive-function' || category === 'weak-native-expensive-access' ||
-      category === 'unhealthy' || category === 'reduced-health') return false;
-  if (category === 'stale') return emaAgeS > MOCK_WALLET_STALE_SELL_SECONDS ? false : null;
-  return null; // neutral, data-pending — keep current position
+  if (category === 'expensive-function' || category === 'weak-native-expensive-access') return false;
+  return null; // stale, unhealthy, reduced-health, neutral, data-pending — no opinion, hold current position
 }
 
 // isNewUpdateEvent: true only when a real on-chain update() has landed since the last tick
@@ -1443,6 +1490,41 @@ function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_
     trajectory.push({ time: obs.time, bias: cumulativeBias });
   }
   return trajectory;
+}
+
+// Minimal hand-rolled SVG line chart — no charting library dependency for a single
+// sparkline. seriesList: [{ data: trajectory (from simulateController), color, label }].
+// Baseline is always flat at 1.0 by construction, so it's drawn as one dashed reference
+// line rather than a redundant third polyline.
+function renderSparkline(containerId, seriesList, width = 600, height = 90) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const n = seriesList[0]?.data.length || 0;
+  if (n < 2) {
+    el.innerHTML = `<div class="footer" style="margin:0">Need at least 2 replayed observations for a trend line — currently ${n}. Call update() again later to accumulate more.</div>`;
+    return;
+  }
+  const allBias = seriesList.flatMap(s => s.data.map(d => d.bias)).concat([1.0]);
+  const minB = Math.min(...allBias), maxB = Math.max(...allBias);
+  const pad  = Math.max((maxB - minB) * 0.2, 0.0005);
+  const lo = minB - pad, hi = maxB + pad;
+  const xAt = i => (i / (n - 1)) * width;
+  const yAt = bias => height - ((bias - lo) / (hi - lo)) * height;
+  const polylines = seriesList.map(s =>
+    `<polyline points="${s.data.map((d, i) => `${xAt(i)},${yAt(d.bias)}`).join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" />`
+  ).join('');
+  const legend = seriesList.map(s =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px;color:var(--muted)">` +
+    `<span style="width:10px;height:2px;background:${s.color};display:inline-block"></span>${s.label}</span>`
+  ).join('') + `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">` +
+    `<span style="width:10px;height:0;border-top:2px dashed var(--border);display:inline-block"></span>Baseline (1.0)</span>`;
+  el.innerHTML =
+    `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" ` +
+      `style="display:block;background:rgba(16,19,28,.03);border-radius:6px">` +
+      `<line x1="0" y1="${yAt(1.0)}" x2="${width}" y2="${yAt(1.0)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="4,4" />` +
+      polylines +
+    `</svg>` +
+    `<div style="margin-top:6px">${legend}</div>`;
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────────
@@ -2066,6 +2148,12 @@ async function refresh() {
         functionalAccepted: regimeInputs.functionalAccepted,
         healthBps:          regimeInputs.healthBps,
         plsPriceUsd,
+        // marketPWpls (P in WPLS terms) — added 2026-08-13 so future replays of the
+        // Purchasing Power Simulator can compare simulated R against REAL historical P,
+        // not just today's live P. Older log rows predate this field and will read
+        // undefined; the simulator treats that as "unknown P at that observation," not 0.
+        marketPWpls:        Pn,
+        redemptionRWpls:    +ethers.utils.formatUnits(R, 18),
         oracleAddress:      ADDR.functionalEMA,
       });
 
@@ -2084,8 +2172,18 @@ async function refresh() {
           observations: simObs, mode: 'v4-bias', dailyBiasCap: SIM_DAILY_BIAS_CAP * throttle.mult,
         });
 
+        renderSparkline('sim-chart-wrap', [
+          { data: nativeDirect, color: 'var(--blue)',   label: 'Native-direct' },
+          { data: v4Bias,       color: 'var(--accent)', label: 'v4-bias' },
+        ]);
+
+        // livePWpls: today's live market price, WPLS terms — the only P we can honestly
+        // compare against right now (see footer note: historical P wasn't logged before
+        // 2026-08-13). Used to classify what pressure each hypothetical R would create if
+        // P stayed roughly where it is today.
+        const livePWpls = redemptionPn;
         const lastBias = arr => arr.length ? arr[arr.length - 1].bias : 1.0;
-        const renderScenario = (idPrefix, biasArr, label) => {
+        const renderScenario = (idPrefix, biasArr, label, throttleTier) => {
           const bias = lastBias(biasArr);
           const rHypothetical = currentR * bias;
           const pct = (bias - 1) * 100;
@@ -2094,19 +2192,25 @@ async function refresh() {
           document.getElementById(idPrefix).className   = 'big ' + cls;
           document.getElementById(idPrefix + '-meta').innerHTML =
             `<span class="${cls}">${pct >= 0 ? '+' : ''}${pct.toFixed(4)}% vs today's R</span>`;
+
+          const redemptionPressure = livePWpls < rHypothetical;
+          const issuancePressure   = livePWpls > rHypothetical;
+          document.getElementById(idPrefix + '-extra').innerHTML =
+            kv('Functional purchasing power retained', (bias * 100).toFixed(4) + '% of today') +
+            kv('Redemption pressure (P &lt; hypothetical R, vs live P)', redemptionPressure ? 'Active' : 'Inactive', redemptionPressure ? 'warn' : 'dim') +
+            kv('Issuance pressure (P &gt; hypothetical R, vs live P)', issuancePressure ? 'Active' : 'Inactive', issuancePressure ? 'up' : 'dim') +
+            kv('Controller throttle', throttleTier);
         };
-        renderScenario('sim-baseline', baseline, 'Baseline');
-        renderScenario('sim-native', nativeDirect, 'Native-direct');
-        renderScenario('sim-v4', v4Bias, 'v4-bias');
+        renderScenario('sim-baseline', baseline, 'Baseline', 'N/A — no index influence applied');
+        renderScenario('sim-native', nativeDirect, 'Native-direct', 'Not throttled (rejected-design comparison case)');
+        renderScenario('sim-v4', v4Bias, 'v4-bias',
+          `${throttle.tier}${throttle.mult < 1 ? ` (cap ×${throttle.mult})` : ''}`);
 
         document.getElementById('sim-cap-label').textContent = (SIM_DAILY_BIAS_CAP * 100).toFixed(2) + '%/day';
         document.getElementById('sim-confirm-label').textContent = SIM_CONFIRM_UPDATES;
 
-        document.getElementById('sim-v4-meta').innerHTML +=
-          tag(`Redemption safety throttle: ${throttle.tier}${throttle.mult < 1 ? ` (cap ×${throttle.mult})` : ''}`,
-              throttle.mult === 1 ? 'ok' : throttle.mult === 0 ? 'bad' : 'warn');
-
         document.getElementById('sim-inputs').innerHTML =
+          kv('Live market price P (used for pressure above)', livePWpls.toFixed(6) + ' WPLS') +
           kv('Observations replayed', simObs.length.toLocaleString()) +
           kv('Current live R', fWPLS(R)) +
           kv('Native-direct final drift', ((lastBias(nativeDirect)-1)*100).toFixed(4) + '%') +
@@ -2115,6 +2219,62 @@ async function refresh() {
              Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim') +
           kv('Redemption safety ratio (drives the throttle above)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : '∞ (nothing extractable)',
              safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'up');
+      }
+
+      // ── Arbitrage Opportunity Overview — P vs R split explicitly into both directions.
+      // The panel below (Redemption Risk) only ever measured the P<R side — it's the
+      // bounded, attacker-profit-vs-cost half of the attack model, which is why it has a
+      // safety ratio and a throttle. P>R issuance/mint arb is a different, NORMAL peg
+      // mechanism (mint SunPLS against WPLS collateral, sell above R) — it's not gated by
+      // R at all (mint is CR-gated, per Vault source), so there's no protocol-state bound
+      // on "how much" the way distressed-vault debt bounds redemption; it's bounded by an
+      // attacker's own capital and the debt ceiling instead. No safety ratio is computed
+      // for it here because it isn't an attack surface in the same sense — flag this
+      // explicitly rather than silently reusing redemption's framing for a different thing.
+      {
+        const issuanceOpportunity = redemptionPn > redemptionRn;
+        const priceEdgePct        = ((redemptionPn - redemptionRn) / redemptionRn) * 100;
+        const redemptionEdgePct   = redemptionOpportunity ? ((redemptionRn - redemptionPn) / redemptionPn) * 100 : 0;
+        const issuanceEdgePct     = issuanceOpportunity   ? priceEdgePct : 0;
+
+        document.getElementById('arb-overview-inputs').innerHTML =
+          kv('Market price P', redemptionPn.toFixed(6) + ' WPLS') +
+          kv('Redemption price R', redemptionRn.toFixed(6) + ' WPLS') +
+          kv('P / R ratio', ((redemptionPn / redemptionRn) * 100).toFixed(4) + '%') +
+          kv('Price edge (P vs R)', (priceEdgePct >= 0 ? '+' : '') + priceEdgePct.toFixed(4) + '%',
+             priceEdgePct >= 0 ? 'up' : 'down');
+
+        const redemptionCard = document.getElementById('arb-redemption-card');
+        redemptionCard.innerHTML =
+          `<div class="cmeta" style="justify-content:space-between;margin-top:0">` +
+            `<b>Redemption arb</b>${tag(redemptionOpportunity ? 'Active' : 'Inactive', redemptionOpportunity ? 'ok' : 'n')}</div>` +
+          `<div class="footer" style="margin-top:2px;margin-bottom:8px">Relevant when P &lt; R</div>` +
+          (redemptionOpportunity
+            ? `<div style="font-size:13px">R is above market — buying SunPLS at P and redeeming at R has a raw edge of ` +
+              `<b class="up">+${redemptionEdgePct.toFixed(4)}%</b>. See Redemption Risk below for how much is actually ` +
+              `extractable and what it would cost an attacker to move the oracle.</div>`
+            : `<div class="footer" style="margin-top:0;margin-bottom:0">No redemption edge right now — P is at or above R.</div>`);
+        redemptionCard.className = 'card' + (redemptionOpportunity ? ' accent-border' : '');
+
+        const issuanceCard = document.getElementById('arb-issuance-card');
+        issuanceCard.innerHTML =
+          `<div class="cmeta" style="justify-content:space-between;margin-top:0">` +
+            `<b>Issuance / mint arb</b>${tag(issuanceOpportunity ? 'Active' : 'Inactive', issuanceOpportunity ? 'ok' : 'n')}</div>` +
+          `<div class="footer" style="margin-top:2px;margin-bottom:8px">Relevant when P &gt; R</div>` +
+          (issuanceOpportunity
+            ? `<div style="font-size:13px">P is above R — minting SunPLS against WPLS collateral and selling at P has a raw edge ` +
+              `of <b class="up">+${issuanceEdgePct.toFixed(4)}%</b> before stability fee, slippage, and gas. This is the ` +
+              `protocol's normal stabilizing mechanism (mint pressure pushes P back toward R), not an attack — no safety ` +
+              `ratio is tracked here because mint is CR-gated, not R-gated, so there's no protocol-side bound on size the ` +
+              `way distressed debt bounds redemption.</div>`
+            : `<div class="footer" style="margin-top:0;margin-bottom:0">No issuance edge right now — P is at or below R.</div>`);
+        issuanceCard.className = 'card' + (issuanceOpportunity ? ' blue-border' : '');
+
+        document.getElementById('arb-overview-footer').textContent = !redemptionOpportunity && !issuanceOpportunity
+          ? 'Neither direction has a raw price edge right now — P and R are effectively aligned.'
+          : !redemptionOpportunity
+          ? 'No redemption opportunity right now (P is at/above R) — that does not mean no arbitrage opportunity: the issuance side above may still be active.'
+          : 'No issuance opportunity right now (P is at/below R) — that does not mean no arbitrage opportunity: the redemption side above may still be active.';
       }
 
       // ── Redemption Risk / Extraction Estimate — rendering only (all numbers already
