@@ -388,11 +388,14 @@
         native-direct tracking (the design we rejected, kept only as the comparison case), and
         v4 slow bias — <code>capped(index − 1.0)</code>, max 0.25%/day, requires health = 100%
         and 3 consecutive confirmed updates in the same direction. Writes nothing on-chain.
-        Each scenario reports functional purchasing power retained, and whether its hypothetical
-        R would currently put the protocol under redemption pressure (P below R) or issuance
-        pressure (P above R) against today's live market price — historical P wasn't logged
-        before 2026-08-13, so this is evaluated against today's P, not a full historical replay
-        yet; new observations now record it so that becomes possible going forward.
+        Each scenario reports <b>reference value retained vs today</b> (R drift only — a lower
+        hypothetical R isn't necessarily worse if v4's own index also shows access getting
+        cheaper, so this is not yet a true functional-purchasing-power outcome), and whether its
+        hypothetical R would currently put the protocol under redemption pressure (P below R) or
+        issuance pressure (P above R) against today's live market price — historical P wasn't
+        logged before 2026-08-13, so this is evaluated against today's P, not a full historical
+        replay yet. True functional purchasing power retained needs a historical V4 + historical
+        P/R replay; new observations now record P so both become possible going forward.
       </p>
     </div>
 
@@ -686,7 +689,10 @@
     data) — shows shape of drift starting from today's live R, not a literal historical reconstruction. Redemption/
     issuance pressure below is evaluated against <b>today's live market price P</b> (historical P wasn't logged
     before 2026-08-13, so this can't yet be a true historical P/R replay — new observations now record P so this
-    becomes possible going forward).
+    becomes possible going forward). "Reference value retained vs today" is R drift only, not yet a true
+    functional-purchasing-power outcome — a lower hypothetical R isn't necessarily worse if the underlying v4
+    index also shows access getting cheaper. True functional purchasing power retained requires a historical
+    V4 + historical P/R replay, and will become more accurate as new observations log P going forward.
   </div>
 </div>
 
@@ -2196,7 +2202,7 @@ async function refresh() {
           const redemptionPressure = livePWpls < rHypothetical;
           const issuancePressure   = livePWpls > rHypothetical;
           document.getElementById(idPrefix + '-extra').innerHTML =
-            kv('Functional purchasing power retained', (bias * 100).toFixed(4) + '% of today') +
+            kv('Reference value retained vs today', (bias * 100).toFixed(4) + '%') +
             kv('Redemption pressure (P &lt; hypothetical R, vs live P)', redemptionPressure ? 'Active' : 'Inactive', redemptionPressure ? 'warn' : 'dim') +
             kv('Issuance pressure (P &gt; hypothetical R, vs live P)', issuancePressure ? 'Active' : 'Inactive', issuancePressure ? 'up' : 'dim') +
             kv('Controller throttle', throttleTier);
