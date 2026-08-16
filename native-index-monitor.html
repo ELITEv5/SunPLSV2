@@ -1211,7 +1211,9 @@ function renderRegimeHist() {
     tr.innerHTML =
       `<td class="dim">${new Date(e.time).toLocaleString()}</td>` +
       `<td>${strengthPfx}${e.label}</td>` +
-      `<td class="dim">${e.reason}</td>` +
+      `<td class="dim">${e.reason}` +
+        (e.matchedRule ? `<br><span style="font-size:11px">${e.matchedRule}</span>` : '') +
+      `</td>` +
       `<td class="dim">native ${e.native}x / func ${e.functional}x</td>`;
     el.appendChild(tr);
   }
