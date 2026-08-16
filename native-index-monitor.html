@@ -398,9 +398,15 @@
         direct design?</b> Replays the real Observation Log — not synthetic data — through three
         transmission models starting from today's live R: no index influence (baseline),
         native-direct tracking (the design we rejected, kept only as the comparison case), and
-        v4 slow bias — <code>capped(index − 1.0)</code>, max 0.25%/day, requires health = 100%
-        and 3 consecutive confirmed updates in the same direction. Writes nothing on-chain.
-        Each scenario reports <b>reference value retained vs today</b> (R drift only — a lower
+        v4 target-seeking — R converges toward a target level implied by the index
+        (<code>R_target = R_anchor × index/index_anchor</code>) rather than being nudged forever
+        in whatever direction the index points; a flat, unchanging index reading produces one
+        bounded adjustment and then stops. (An earlier perpetual-bias version didn't have this
+        property — a flat 1.01x reading would have compounded R upward without bound; caught by
+        outside review, verified in code, replaced 2026-08-15.) Max 0.25%/day, requires health =
+        100% and 3 consecutive confirmed observations still needing to move the same direction to
+        reach the target. Writes nothing on-chain. Each scenario reports <b>reference value
+        retained vs today</b> (R drift only — a lower
         hypothetical R isn't necessarily worse if v4's own index also shows access getting
         cheaper, so this is not yet a true functional-purchasing-power outcome), and whether its
         hypothetical R would currently put the protocol under redemption pressure (P below R) or
@@ -422,7 +428,14 @@
       <p style="margin-top:10px">
         This is fundamentally different from every stablecoin today. Not pegged to USD.
         Not pegged to gold. Not a token index. Pegged to <b>measurable economic activity</b> on the
-        chain it lives on — and still fully collateralised and redeemable at all times.
+        chain it lives on — and every vault is required to stay overcollateralized to mint or hold
+        debt. That is not the same claim as "redeemable at all times, by anyone, against any
+        vault": <code>redeem()</code> only pays out against a <b>specific target vault already at
+        CR ≤ 130%</b> (verified in the Vault source), priced at R. R is better understood as a
+        <b>monetary reference the market is expected to chase</b>, not a hard floor with guaranteed
+        redemption on demand — redemption pressure toward R exists only where distressed vault
+        debt actually exists to redeem against; a healthy vault population can sit at P below R
+        with no mechanical redemption gravity pulling it back up.
       </p>
       <p style="margin-top:10px">
         Scoped honestly, on purpose: <b>SunPLS does not attempt to preserve purchasing power
@@ -448,7 +461,7 @@
         <li>Are borrowers and holders <b>not destabilised</b> by slow, capped index movement?</li>
         <li>Does the <b>PLS Trading Signal Experiment</b> actually outperform buy-and-hold, now that the entry/exit asymmetry is fixed? Still an open, unanswered question — the old number no longer applies, and there's no new verdict yet. This is a side curiosity, not the thesis.</li>
         <li>Does the <b>Manipulation Cost / Redemption Risk</b> safety margin hold as the protocol grows, or only because today's deployment is nearly empty?</li>
-        <li>Does the <b>SunPLS Purchasing Power Simulator</b> show v4-bias actually retaining more functional purchasing power than baseline or native-direct, once there's enough replayed history to say so with confidence?</li>
+        <li>Does the <b>SunPLS Purchasing Power Simulator</b> show v4 target-seeking actually retaining more functional purchasing power than baseline or native-direct, once there's enough replayed history to say so with confidence?</li>
       </ul>
     </div>
 
@@ -694,7 +707,7 @@
       <div id="sim-native-extra" style="margin-top:6px"></div>
     </div>
     <div class="card accent-border">
-      <div class="clabel">v4 slow bias <span class="dim" style="text-transform:none;font-size:10px">(proposed design)</span></div>
+      <div class="clabel">v4 target-seeking <span class="dim" style="text-transform:none;font-size:10px">(proposed design)</span></div>
       <div class="big" id="sim-v4">—</div>
       <div class="cmeta" id="sim-v4-meta"></div>
       <div id="sim-v4-extra" style="margin-top:6px"></div>
@@ -702,13 +715,20 @@
   </div>
   <div id="sim-inputs"></div>
   <div class="footer" style="margin-top:12px;margin-bottom:0">
-    Transmission function: capped(index − 1.0) bias, max <span id="sim-cap-label">0.25%/day</span>, requires health = 100% and
-    <span id="sim-confirm-label">3</span> consecutive same-direction confirmed updates. Health/persistence gating applied
-    identically to both hypothetical scenarios — native-direct differs from v4-bias only in which index drives the bias.
-    v4-bias additionally throttles its daily cap by the live Redemption Risk safety ratio (&gt;10x full, 3-10x ×0.5,
-    1-3x ×0.1, &lt;1x frozen) — native-direct does not get this throttle, since it's the rejected-design comparison
-    case, not something this safety rail exists to protect. Replayed over the real observation log (not synthetic
-    data) — shows shape of drift starting from today's live R, not a literal historical reconstruction. Redemption/
+    Transmission function (replaced 2026-08-15 — the earlier perpetual-bias version had a ratchet bug: a
+    flat, unchanging index reading would compound R upward forever instead of stopping; caught by outside
+    review, verified in code, fixed): R chases a target level implied by the index —
+    <code>R_target = R_anchor × (index / index_anchor)</code>, converging via
+    <code>Δ(ln R) = clip(k × ln(R_target / R), ±max/day)</code>, max <span id="sim-cap-label">0.25%/day</span>,
+    requires health = 100% and <span id="sim-confirm-label">3</span> consecutive confirmed observations where R
+    still needs to move the same direction to reach the target. If the index holds steady, R converges once and
+    stops — it does not keep drifting just because the index sits away from 1.0. Health/persistence gating applied
+    identically to both hypothetical scenarios — native-direct differs from v4-target-seeking only in which index
+    drives the target. v4-target-seeking additionally throttles its daily cap by the live Redemption Risk safety
+    ratio (&gt;10x full, 3-10x ×0.5, 1-3x ×0.1, &lt;1x frozen) — native-direct does not get this throttle, since
+    it's the rejected-design comparison case, not something this safety rail exists to protect. Replayed over the
+    real observation log (not synthetic data) — shows shape of convergence starting from today's live R, not a
+    literal historical reconstruction. Redemption/
     issuance pressure below is evaluated against <b>today's live market price P</b> (historical P wasn't logged
     before 2026-08-13, so this can't yet be a true historical P/R replay — new observations now record P so this
     becomes possible going forward). "Reference value retained vs today" is R drift only, not yet a true
@@ -1544,12 +1564,36 @@ function estimateAttackCostUsd(wplsNeeded, plsPriceUsd) {
 // R reconstruction — this dashboard doesn't have historical R aligned to observation-log
 // timestamps, so it shows *shape of drift*, not "R was exactly this on this date."
 //
-// Transmission function (2026-08-09, agreed): capped(index - 1.0) bias on top of the
-// existing P/R controller, gated on health=100% and requiring the deviation to persist in
-// the same direction across SIM_CONFIRM_UPDATES consecutive real update() events — same
-// persistence pattern already proven in the mock wallet, generalized from discrete regime
-// categories to a continuous deviation direction.
-const SIM_DAILY_BIAS_CAP     = 0.0025; // 0.25%/day — conservative end of the agreed 0.25-0.50% range
+// Transmission function REPLACED 2026-08-15 — the original (2026-08-09) design had a real
+// ratchet bug, caught by outside review and verified in code before agreeing: it applied
+// capped(index - 1.0) as a PERPETUAL per-observation nudge, with no notion of "arrived."
+// A V4 reading that sat flat at 1.01x forever (deviation from 1.0 never shrinking) would
+// keep compounding cumulativeBias upward without bound, every single confirmed observation,
+// instead of making one bounded ~1% adjustment and stopping — directly contradicting the
+// "R tracks functional purchasing power" thesis, since R would grow indefinitely detached
+// from a V4 reading that itself never moved.
+//
+// Now target-seeking instead of perpetual-bias: R chases a LEVEL implied by the index,
+// anchored once at the start of the replay (F_anchor = index value at the first replayed
+// observation, i.e. "today"), not a direction nudged forever just because the index sits
+// away from a fixed 1.0 baseline.
+//
+//   R_target = R_anchor * (F_current / F_anchor)
+//   deltaLogR = clip(k * ln(R_target / R_current), -maxStep, +maxStep)   [maxStep scaled by elapsed days]
+//
+// If the index holds at a new level, R converges to the level it implies and then STOPS
+// (deltaLogR -> 0 as R_current -> R_target) — it does not keep drifting just because the
+// index remains away from 1.0. If the index later falls back, R_target falls back too, and
+// R follows it back down. Confirmation gating now tracks the SIGN OF THE REMAINING GAP
+// (does R still need to move in this direction to reach the target), not raw index-vs-1.0
+// deviation — same persistence pattern as before (SIM_CONFIRM_UPDATES consecutive
+// same-direction confirmed observations), just applied to the right quantity.
+//
+// SIM_CONVERGENCE_K is a placeholder, not a calibrated value — needs real research before
+// any real Controller v2 design treats it as settled, same discipline already applied to
+// every other unvalidated constant on this page (see roadmap).
+const SIM_DAILY_BIAS_CAP     = 0.0025; // 0.25%/day cap on |deltaLogR| — conservative end of the agreed 0.25-0.50% range
+const SIM_CONVERGENCE_K      = 0.5;    // placeholder convergence rate, NOT calibrated
 const SIM_CONFIRM_UPDATES    = 3;      // "2-3 accepted updates" — using the conservative end
 const SIM_REQUIRE_HEALTH_BPS = 10000;  // "requires health = 100%"
 
@@ -1559,9 +1603,10 @@ const SIM_REQUIRE_HEALTH_BPS = 10000;  // "requires health = 100%"
 // 'v4-bias' (the actual proposed design). native-direct and v4-bias share IDENTICAL
 // gating/persistence rules, differing only in which index drives the bias — an apples-to-
 // apples comparison, not a strawman with the safety rails removed from one side.
-function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_CAP }) {
-  let cumulativeBias = 1.0;
+function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_CAP, k = SIM_CONVERGENCE_K }) {
+  let logBias = 0; // ln(R_current / R_anchor) — bias itself is exp(logBias)
   let pendingDirection = null, pendingCount = 0;
+  let fAnchor = null; // index value at the first replayed observation — the reference level R_target is computed relative to
   const trajectory = [];
   let prevTime = observations.length ? observations[0].time : Date.now();
 
@@ -1570,18 +1615,27 @@ function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_
     prevTime = obs.time;
 
     if (mode === 'baseline') {
-      trajectory.push({ time: obs.time, bias: cumulativeBias });
+      trajectory.push({ time: obs.time, bias: Math.exp(logBias) });
       continue;
     }
 
     const indexValue = mode === 'native-direct' ? obs.nativeAccepted : obs.functionalAccepted;
-    const deviation  = indexValue - 1.0;
-    const healthOk   = obs.healthBps >= SIM_REQUIRE_HEALTH_BPS;
-    const direction  = deviation > 0 ? 'up' : deviation < 0 ? 'down' : null;
+    if (fAnchor === null) fAnchor = indexValue; // anchor once — "today's" reference level for this replay
+
+    // logTarget: ln(R_target / R_anchor), since R_target/R_anchor = F_current/F_anchor by
+    // definition. gap: how far logBias still needs to move to reach that target — this,
+    // not raw index-vs-1.0 deviation, is what confirmation-gating should track, since it's
+    // the thing that actually shrinks to zero (and can flip sign) as R converges or the
+    // index reverses — raw deviation from 1.0 never shrinks just because R caught up to it,
+    // which was exactly the old model's bug.
+    const logTarget = Math.log(indexValue / fAnchor);
+    const gap        = logTarget - logBias;
+    const healthOk    = obs.healthBps >= SIM_REQUIRE_HEALTH_BPS;
+    const direction    = gap > 0 ? 'up' : gap < 0 ? 'down' : null;
 
     if (!healthOk || direction === null) {
       pendingDirection = null; pendingCount = 0;
-      trajectory.push({ time: obs.time, bias: cumulativeBias });
+      trajectory.push({ time: obs.time, bias: Math.exp(logBias) });
       continue;
     }
     if (pendingDirection === direction) pendingCount++;
@@ -1589,10 +1643,10 @@ function simulateController({ observations, mode, dailyBiasCap = SIM_DAILY_BIAS_
 
     if (pendingCount >= SIM_CONFIRM_UPDATES) {
       const maxStep = dailyBiasCap * elapsedDays;
-      const step = Math.sign(deviation) * Math.min(Math.abs(deviation), maxStep);
-      cumulativeBias *= (1 + step);
+      const step = Math.sign(gap) * Math.min(Math.abs(k * gap), maxStep);
+      logBias += step;
     }
-    trajectory.push({ time: obs.time, bias: cumulativeBias });
+    trajectory.push({ time: obs.time, bias: Math.exp(logBias) });
   }
   return trajectory;
 }
@@ -2279,7 +2333,7 @@ async function refresh() {
 
         renderSparkline('sim-chart-wrap', [
           { data: nativeDirect, color: 'var(--blue)',   label: 'Native-direct' },
-          { data: v4Bias,       color: 'var(--accent)', label: 'v4-bias' },
+          { data: v4Bias,       color: 'var(--accent)', label: 'v4-target-seeking' },
         ]);
 
         // livePWpls: today's live market price, WPLS terms — the only P we can honestly
@@ -2319,8 +2373,8 @@ async function refresh() {
           kv('Observations replayed', simObs.length.toLocaleString()) +
           kv('Current live R', fWPLS(R)) +
           kv('Native-direct final drift', ((lastBias(nativeDirect)-1)*100).toFixed(4) + '%') +
-          kv('v4-bias final drift',       ((lastBias(v4Bias)-1)*100).toFixed(4) + '%') +
-          kv('Divergence (native-direct − v4-bias)', (((lastBias(nativeDirect)-lastBias(v4Bias)))*100).toFixed(4) + ' points',
+          kv('v4-target-seeking final drift', ((lastBias(v4Bias)-1)*100).toFixed(4) + '%') +
+          kv('Divergence (native-direct − v4-target-seeking)', (((lastBias(nativeDirect)-lastBias(v4Bias)))*100).toFixed(4) + ' points',
              Math.abs(lastBias(nativeDirect)-lastBias(v4Bias)) > 0.001 ? 'warn' : 'dim') +
           kv('Redemption safety ratio (drives the throttle above)', safetyRatio != null ? safetyRatio.toFixed(2) + 'x' : '∞ (nothing extractable)',
              safetyRatio != null ? (safetyRatio >= 1 ? 'up' : 'down') : 'up');
@@ -2433,7 +2487,7 @@ async function refresh() {
         }
 
         document.getElementById('redemption-risk-footer').textContent =
-          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}. This same ratio now directly throttles the Purchasing Power Simulator's v4-bias scenario above.`;
+          `Extraction estimate assumes an attacker could instantly buy ${distressedDebtWpls.toFixed(2)} SunPLS at today's market price P and redeem it — real execution would face slippage on that purchase too, not modeled here. Safety ratio > 1x means manipulation costs more than it could extract; today there is ${redemptionOpportunity ? 'a live P<R gap' : 'no P<R gap'}, so extractable value is ${maxExtractableUsd === 0 ? 'currently zero regardless of distressed debt' : 'nonzero'}. This same ratio now directly throttles the Purchasing Power Simulator's v4-target-seeking scenario above.`;
       }
     }
 
