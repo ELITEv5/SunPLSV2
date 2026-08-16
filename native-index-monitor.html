@@ -819,13 +819,66 @@
   </div>
 </div>
 
-<!-- ── Actions ── -->
-<div class="actions">
-  <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
-  <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Call update() on Native Index</button>
-  <button id="btn-func2-update" class="primary" onclick="callFunctional2Update()" disabled>Call update() on Functional v2</button>
-  <button id="btn-ema-update"   class="primary" onclick="callFunctionalEMAUpdate()" disabled>Call update() on Functional EMA</button>
-  <span id="msg"></span>
+<!-- ── Oracle Poke / Refresh ── -->
+<div class="section-label" style="margin-top:20px">Oracle Poke / Refresh &nbsp;·&nbsp; <span style="color:var(--muted)">manual research maintenance, not autonomy</span></div>
+<div class="card" style="margin-bottom:12px">
+  <div class="actions" style="margin-top:0">
+    <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
+    <span id="msg"></span>
+  </div>
+  <div id="poke-network-warn" class="footer" style="margin-top:8px;margin-bottom:0"></div>
+
+  <div style="margin-top:14px">
+    <button id="btn-run-all" class="primary" onclick="runAllPokes()" disabled>
+      Run All (epoch trigger → 3 oracles → refresh)
+    </button>
+    <div class="footer" id="run-all-status" style="margin-top:5px;margin-bottom:0">
+      One click, same sequence as the manual workflow: triggers the Controller epoch, then pokes
+      Native / Functional v2 / V4 in turn, then does a final refresh. Still one wallet confirmation
+      per step underneath — this automates the clicking and waiting between them, not the signing.
+      If the epoch isn't due yet, that step is skipped as expected, not treated as an error.
+    </div>
+  </div>
+
+  <div class="footer" style="margin-top:12px;margin-bottom:0">
+    <b>For the clearest picture, poke Native Index, Functional v2, and V4 Oracle together, in one
+    sitting, before relying on the divergence/comparison metrics elsewhere on this page</b> (Core
+    Access Regime, the Purchasing Power Simulator, Arbitrage Opportunity). Those compare the
+    oracles against each other — if one was last poked hours ago and another minutes ago, an
+    apparent divergence can just be a timing mismatch, not a real signal. The Controller poke
+    below is independent of this: `triggerEpoch()` reads a separate, unrelated price oracle
+    (verified in source), so its order relative to the three above doesn't affect their
+    freshness — poke it on its own schedule, whenever you specifically want to test or advance
+    the live rate mechanism.
+  </div>
+
+  <div style="margin-top:16px; display:flex; flex-direction:column; gap:14px">
+    <div>
+      <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Poke Native Index</button>
+      <div class="footer" id="poke-status-native" style="margin-top:5px;margin-bottom:0">Not poked this session.</div>
+    </div>
+    <div>
+      <button id="btn-func2-update" class="primary" onclick="callFunctional2Update()" disabled>Poke Functional v2</button>
+      <div class="footer" id="poke-status-func2" style="margin-top:5px;margin-bottom:0">Not poked this session.</div>
+    </div>
+    <div>
+      <button id="btn-ema-update" class="primary" onclick="callFunctionalEMAUpdate()" disabled>Poke V4 Oracle</button>
+      <div class="footer" id="poke-status-ema" style="margin-top:5px;margin-bottom:0">Not poked this session.</div>
+    </div>
+    <div>
+      <button id="btn-ctrl-poke" class="primary" onclick="callTriggerEpoch()" disabled>Poke Controller (triggerEpoch)</button>
+      <div class="footer" id="poke-status-ctrl" style="margin-top:5px;margin-bottom:0">
+        Not poked this session. Permissionless on-chain, unrelated to this research — likely already
+        keeper-driven elsewhere; this just nudges the next epoch along if one is due.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer" style="margin-top:16px;margin-bottom:0">
+    <b>Manual research maintenance, not autonomy.</b> These buttons make testing convenient — they
+    do not make the protocol autonomous. Long-term, monetary policy execution still needs a
+    permissionless keeper so it doesn't depend on someone remembering to click a button.
+  </div>
 </div>
 
 <!-- ── History ── -->
@@ -890,6 +943,13 @@ const CTRL_ABI = [
   'function frozenEpochs() view returns (uint256)',
   'function emergencyEpochs() view returns (uint256)',
   'function deadbandSkips() view returns (uint256)',
+  // Write, permissionless by design (verified in source: `@notice Trigger a control
+  // epoch. Permissionless.`, no access-control modifier). Just executes the live
+  // controller's own already-deterministic P-vs-R logic for the next due epoch — this
+  // dashboard poking it doesn't feed it anything, doesn't influence the outcome, and
+  // isn't new operational involvement in live policy, just a convenience trigger for
+  // logic that's already running unrelated to this research (see roadmap).
+  'function triggerEpoch() external',
 ];
 const PAIR_ABI = [
   'function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
@@ -937,8 +997,9 @@ const ctrlC         = new ethers.Contract(ADDR.controller,   CTRL_ABI,     prov)
 const vaultC        = new ethers.Contract(ADDR.vault,        VAULT_ABI,    prov);
 const wplsDaiPairC  = new ethers.Contract(ADDR.wplsDaiPair,  PAIR_ABI,     prov);
 
-let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null,
+let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null, writeCtrlC = null,
     signer = null, countdown = 30;
+const lastPoke = { native: null, func2: null, ema: null, ctrl: null }; // { time, blockNumber, txHash } once a poke succeeds this session
 
 // ── Core Access Regime (analytics only — never touches R, controller, or contract calls) ──
 const REGIME_THRESHOLDS = {
@@ -2397,71 +2458,137 @@ async function connectWallet() {
   writeIndexC         = new ethers.Contract(ADDR.index,        INDEX_ABI,    signer);
   writeFunctional2C   = new ethers.Contract(ADDR.functional2,  FUNC_ABI,     signer);
   writeFunctionalEMAC = new ethers.Contract(ADDR.functionalEMA, FUNC_EMA_ABI, signer);
+  writeCtrlC          = new ethers.Contract(ADDR.controller,   CTRL_ABI,     signer);
   const addr = await signer.getAddress();
   document.getElementById('btn-connect').textContent   = addr.slice(0,6)+'…'+addr.slice(-4);
   document.getElementById('btn-update').disabled       = false;
   document.getElementById('btn-func2-update').disabled = false;
   document.getElementById('btn-ema-update').disabled   = false;
+  document.getElementById('btn-ctrl-poke').disabled    = false;
+  document.getElementById('btn-run-all').disabled      = false;
+  document.getElementById('poke-network-warn').textContent = '';
+}
+
+// Re-checked before every poke, not just at connect time — a wallet can switch
+// networks mid-session without this page knowing until a call is actually attempted.
+async function ensurePulseChain() {
+  if (!signer) { alert('Connect wallet first.'); return false; }
+  const net = await signer.provider.getNetwork();
+  const warnEl = document.getElementById('poke-network-warn');
+  if (net.chainId !== 369) {
+    warnEl.innerHTML = '<span class="down">Wallet is not on PulseChain (chain ID 369) — switch networks and try again.</span>';
+    return false;
+  }
+  warnEl.textContent = '';
+  return true;
+}
+
+function renderPokeStatus(key, elId) {
+  const el = document.getElementById(elId), p = lastPoke[key];
+  if (!p) return; // leave the static "Not poked this session." text alone
+  const tail = elId === 'poke-status-ctrl'
+    ? ' — permissionless, unrelated to this research; just nudges the next epoch along.'
+    : '';
+  el.innerHTML = `<span class="up">&#10003;</span> Block ${p.blockNumber} — ` +
+    `<a href="https://scan.pulsechain.com/tx/${p.txHash}" target="_blank">${p.txHash.slice(0,10)}…</a>` +
+    ` — ${ago(Math.floor(p.time / 1000))} ago${tail}`;
+}
+
+// Shared poke path for all four write buttons (three oracles + the live controller's
+// triggerEpoch) — same pending/disable/error handling and per-button status rendering,
+// so the four call sites below don't each reimplement it slightly differently.
+async function pokeContract({ contract, fnName, btnId, statusElId, pokeKey, onSuccess, benignErrors = [] }) {
+  if (!contract) { alert('Connect wallet first.'); return; }
+  if (!(await ensurePulseChain())) return;
+  const btn = document.getElementById(btnId), status = document.getElementById(statusElId);
+  btn.disabled = true; status.textContent = 'Sending…';
+  try {
+    const tx = await contract[fnName]();
+    status.innerHTML = `Pending <a href="https://scan.pulsechain.com/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}…</a>`;
+    const receipt = await tx.wait();
+    lastPoke[pokeKey] = { time: Date.now(), blockNumber: receipt.blockNumber, txHash: receipt.transactionHash };
+    renderPokeStatus(pokeKey, statusElId);
+    if (onSuccess) await onSuccess();
+    await refresh();
+  } catch(e) {
+    const reason = String(e.reason || e.message || e);
+    // Some reverts are expected outcomes, not failures (e.g. the Controller's epoch not
+    // being due yet) — shown as an informational skip, not a red error.
+    const benign = benignErrors.find(b => reason.includes(b));
+    status.innerHTML = benign
+      ? `<span class="dim">${benign} — not due yet, this is normal, skipped.</span>`
+      : `<span class="down">Error: ${reason.slice(0, 140)}</span>`;
+  } finally { btn.disabled = false; }
 }
 
 async function callUpdate() {
-  if (!writeIndexC) return;
-  const btn = document.getElementById('btn-update'), msg = document.getElementById('msg');
-  btn.disabled = true; msg.textContent = 'Sending…';
-  try {
-    const tx = await writeIndexC.update();
-    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
-    const receipt = await tx.wait();
-    msg.textContent = '✓ Block ' + receipt.blockNumber;
-
-    const [idxPeek, rawIdx, oraclePeek, R] = await Promise.all([
-      indexC.peek(), indexC.lastRawIndex(), oracleC.peek(), ctrlC.R(),
-    ]);
-    const hist = loadHist();
-    const prev = hist.length ? parseFloat(hist[hist.length-1].accepted) : null;
-    hist.push({
-      time:     Date.now(),
-      accepted: f18(idxPeek.index),
-      raw:      f18(rawIdx),
-      capped:   !rawIdx.eq(idxPeek.index),
-      prevAcc:  prev,
-      R:        fWPLS(R),
-      P:        fWPLS(oraclePeek.price),
-    });
-    saveHist(hist); renderHist(); await refresh();
-  } catch(e) {
-    msg.textContent = 'Error: ' + (e.reason || e.message || e);
-  } finally { btn.disabled = false; }
+  await pokeContract({
+    contract: writeIndexC, fnName: 'update', btnId: 'btn-update',
+    statusElId: 'poke-status-native', pokeKey: 'native',
+    onSuccess: async () => {
+      const [idxPeek, rawIdx, oraclePeek, R] = await Promise.all([
+        indexC.peek(), indexC.lastRawIndex(), oracleC.peek(), ctrlC.R(),
+      ]);
+      const hist = loadHist();
+      const prev = hist.length ? parseFloat(hist[hist.length-1].accepted) : null;
+      hist.push({
+        time:     Date.now(),
+        accepted: f18(idxPeek.index),
+        raw:      f18(rawIdx),
+        capped:   !rawIdx.eq(idxPeek.index),
+        prevAcc:  prev,
+        R:        fWPLS(R),
+        P:        fWPLS(oraclePeek.price),
+      });
+      saveHist(hist); renderHist();
+    },
+  });
 }
 
 async function callFunctional2Update() {
-  if (!writeFunctional2C) return;
-  const btn = document.getElementById('btn-func2-update'), msg = document.getElementById('msg');
-  btn.disabled = true; msg.textContent = 'Sending…';
-  try {
-    const tx = await writeFunctional2C.update();
-    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
-    const receipt = await tx.wait();
-    msg.textContent = '✓ Block ' + receipt.blockNumber;
-    await refresh();
-  } catch(e) {
-    msg.textContent = 'Error: ' + (e.reason || e.message || e);
-  } finally { btn.disabled = false; }
+  await pokeContract({
+    contract: writeFunctional2C, fnName: 'update', btnId: 'btn-func2-update',
+    statusElId: 'poke-status-func2', pokeKey: 'func2',
+  });
 }
 
 async function callFunctionalEMAUpdate() {
-  if (!writeFunctionalEMAC) return;
-  const btn = document.getElementById('btn-ema-update'), msg = document.getElementById('msg');
-  btn.disabled = true; msg.textContent = 'Sending…';
-  try {
-    const tx = await writeFunctionalEMAC.update();
-    msg.textContent = 'Pending ' + tx.hash.slice(0,12) + '…';
-    const receipt = await tx.wait();
-    msg.textContent = '✓ Block ' + receipt.blockNumber;
-    await refresh();
-  } catch(e) {
-    msg.textContent = 'Error: ' + (e.reason || e.message || e);
-  } finally { btn.disabled = false; }
+  await pokeContract({
+    contract: writeFunctionalEMAC, fnName: 'update', btnId: 'btn-ema-update',
+    statusElId: 'poke-status-ema', pokeKey: 'ema',
+  });
+}
+
+async function callTriggerEpoch() {
+  await pokeContract({
+    contract: writeCtrlC, fnName: 'triggerEpoch', btnId: 'btn-ctrl-poke',
+    statusElId: 'poke-status-ctrl', pokeKey: 'ctrl',
+    benignErrors: ['Epoch not ready'],
+  });
+}
+
+// One-click version of the manual workflow: epoch trigger, then the three oracles, then a
+// final refresh — same sequence as clicking each button in turn and waiting for it to land,
+// just without babysitting it. Each step below still pops its own wallet confirmation and
+// fully handles its own errors (pokeContract never throws), so a failure or an expected skip
+// (e.g. epoch not due) on one step doesn't block the rest of the sequence.
+async function runAllPokes() {
+  if (!signer) { alert('Connect wallet first.'); return; }
+  const btn = document.getElementById('btn-run-all'), status = document.getElementById('run-all-status');
+  btn.disabled = true;
+  const steps = [
+    ['1/4 — Epoch trigger',   callTriggerEpoch],
+    ['2/4 — Native Index',    callUpdate],
+    ['3/4 — Functional v2',   callFunctional2Update],
+    ['4/4 — V4 Oracle',       callFunctionalEMAUpdate],
+  ];
+  for (const [label, fn] of steps) {
+    status.textContent = `Running ${label}… (see status under that button below)`;
+    await fn();
+  }
+  await refresh();
+  status.innerHTML = `<span class="up">&#10003;</span> Sequence complete — dashboard refreshed with the latest data.`;
+  btn.disabled = false;
 }
 
 // ── Tick ──────────────────────────────────────────────────────────────────────
@@ -2474,6 +2601,10 @@ function tick() {
   if (countdown <= 0) { countdown = 30; refresh(); }
   document.getElementById('footer').textContent =
     'Last refreshed: ' + new Date().toLocaleTimeString() + '  ·  Next in ' + countdown + 's';
+  renderPokeStatus('native', 'poke-status-native');
+  renderPokeStatus('func2',  'poke-status-func2');
+  renderPokeStatus('ema',    'poke-status-ema');
+  renderPokeStatus('ctrl',   'poke-status-ctrl');
 }
 
 refresh(); renderHist(); renderRegimeHist(); renderObsLog(); setInterval(tick, 1000);
