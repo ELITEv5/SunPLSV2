@@ -820,7 +820,7 @@
 </div>
 
 <!-- ── Oracle Poke / Refresh ── -->
-<div class="section-label" style="margin-top:20px">Oracle Poke / Refresh &nbsp;·&nbsp; <span style="color:var(--muted)">manual research maintenance, not autonomy</span></div>
+<div class="section-label" style="margin-top:20px">Oracle Poke / Refresh &nbsp;·&nbsp; <span style="color:var(--muted)">manual research maintenance, not autonomy — includes the Price Oracle + Controller epoch, so the separate SunPLSV2 vault page isn't a required stop first</span></div>
 <div class="card" style="margin-bottom:12px">
   <div class="actions" style="margin-top:0">
     <button id="btn-connect" onclick="connectWallet()">Connect Wallet</button>
@@ -830,13 +830,14 @@
 
   <div style="margin-top:14px">
     <button id="btn-run-all" class="primary" onclick="runAllPokes()" disabled>
-      Run All (epoch trigger → 3 oracles → refresh)
+      Run All (price oracle → epoch trigger → 3 research oracles → refresh)
     </button>
     <div class="footer" id="run-all-status" style="margin-top:5px;margin-bottom:0">
-      One click, same sequence as the manual workflow: triggers the Controller epoch, then pokes
-      Native / Functional v2 / V4 in turn, then does a final refresh. Still one wallet confirmation
-      per step underneath — this automates the clicking and waiting between them, not the signing.
-      If the epoch isn't due yet, that step is skipped as expected, not treated as an error.
+      One click, same sequence as the manual workflow (price oracle update + epoch trigger on the
+      SunPLSV2 vault page, then the three research oracle pokes here) — now all in one place. Still
+      one wallet confirmation per step underneath — this automates the clicking and waiting between
+      them, not the signing. If the epoch isn't due yet, that step is skipped as expected, not
+      treated as an error.
     </div>
   </div>
 
@@ -845,14 +846,30 @@
     sitting, before relying on the divergence/comparison metrics elsewhere on this page</b> (Core
     Access Regime, the Purchasing Power Simulator, Arbitrage Opportunity). Those compare the
     oracles against each other — if one was last poked hours ago and another minutes ago, an
-    apparent divergence can just be a timing mismatch, not a real signal. The Controller poke
-    below is independent of this: `triggerEpoch()` reads a separate, unrelated price oracle
-    (verified in source), so its order relative to the three above doesn't affect their
-    freshness — poke it on its own schedule, whenever you specifically want to test or advance
-    the live rate mechanism.
+    apparent divergence can just be a timing mismatch, not a real signal. The Price Oracle and
+    Controller pokes below are independent of that concern — verified in source that
+    `triggerEpoch()` reads only the Price Oracle, never the three research oracles — but a fresh
+    Price Oracle poke does matter for its own reason: the Arbitrage Opportunity and Redemption
+    Risk panels compare live P against R, so a stale P there can misstate whether a real
+    redemption/issuance edge currently exists.
   </div>
 
   <div style="margin-top:16px; display:flex; flex-direction:column; gap:14px">
+    <div>
+      <button id="btn-price-oracle" class="primary" onclick="callPriceOracleUpdate()" disabled>Poke Price Oracle</button>
+      <div class="footer" id="poke-status-price" style="margin-top:5px;margin-bottom:0">
+        Not poked this session. Same call as `updateOracleBtn` on the SunPLSV2 vault page
+        (`oracle.connect(signer).update()`) — folded in here.
+      </div>
+    </div>
+    <div>
+      <button id="btn-ctrl-poke" class="primary" onclick="callTriggerEpoch()" disabled>Poke Controller (triggerEpoch)</button>
+      <div class="footer" id="poke-status-ctrl" style="margin-top:5px;margin-bottom:0">
+        Not poked this session. Permissionless on-chain, unrelated to the research oracles below —
+        this just nudges the next epoch along if one is due, same as `triggerEpochBtn` on the
+        SunPLSV2 vault page.
+      </div>
+    </div>
     <div>
       <button id="btn-update" class="primary" onclick="callUpdate()" disabled>Poke Native Index</button>
       <div class="footer" id="poke-status-native" style="margin-top:5px;margin-bottom:0">Not poked this session.</div>
@@ -864,13 +881,6 @@
     <div>
       <button id="btn-ema-update" class="primary" onclick="callFunctionalEMAUpdate()" disabled>Poke V4 Oracle</button>
       <div class="footer" id="poke-status-ema" style="margin-top:5px;margin-bottom:0">Not poked this session.</div>
-    </div>
-    <div>
-      <button id="btn-ctrl-poke" class="primary" onclick="callTriggerEpoch()" disabled>Poke Controller (triggerEpoch)</button>
-      <div class="footer" id="poke-status-ctrl" style="margin-top:5px;margin-bottom:0">
-        Not poked this session. Permissionless on-chain, unrelated to this research — likely already
-        keeper-driven elsewhere; this just nudges the next epoch along if one is due.
-      </div>
     </div>
   </div>
 
@@ -931,6 +941,10 @@ const ORACLE_ABI = [
   'function peek() view returns (uint256 price, uint256 timestamp)',
   'function isHealthy() view returns (bool)',
   'function getCreepingState() view returns (uint256 pending, uint8 confs, bool isCreeping)',
+  // Write. Same call the separate SunPLSV2 vault frontend (index.html) makes via
+  // `oracle.connect(signer).update()` — folded in here so that page doesn't need a
+  // separate visit before running this dashboard's own oracle pokes.
+  'function update() external returns (uint256 price, uint256 timestamp)',
 ];
 const CTRL_ABI = [
   'function R() view returns (uint256)',
@@ -998,8 +1012,8 @@ const vaultC        = new ethers.Contract(ADDR.vault,        VAULT_ABI,    prov)
 const wplsDaiPairC  = new ethers.Contract(ADDR.wplsDaiPair,  PAIR_ABI,     prov);
 
 let writeIndexC = null, writeFunctional2C = null, writeFunctionalEMAC = null, writeCtrlC = null,
-    signer = null, countdown = 30;
-const lastPoke = { native: null, func2: null, ema: null, ctrl: null }; // { time, blockNumber, txHash } once a poke succeeds this session
+    writeOracleC = null, signer = null, countdown = 30;
+const lastPoke = { price: null, native: null, func2: null, ema: null, ctrl: null }; // { time, blockNumber, txHash } once a poke succeeds this session
 
 // ── Core Access Regime (analytics only — never touches R, controller, or contract calls) ──
 const REGIME_THRESHOLDS = {
@@ -2461,8 +2475,10 @@ async function connectWallet() {
   writeFunctional2C   = new ethers.Contract(ADDR.functional2,  FUNC_ABI,     signer);
   writeFunctionalEMAC = new ethers.Contract(ADDR.functionalEMA, FUNC_EMA_ABI, signer);
   writeCtrlC          = new ethers.Contract(ADDR.controller,   CTRL_ABI,     signer);
+  writeOracleC        = new ethers.Contract(ADDR.oracle,       ORACLE_ABI,   signer);
   const addr = await signer.getAddress();
   document.getElementById('btn-connect').textContent   = addr.slice(0,6)+'…'+addr.slice(-4);
+  document.getElementById('btn-price-oracle').disabled = false;
   document.getElementById('btn-update').disabled       = false;
   document.getElementById('btn-func2-update').disabled = false;
   document.getElementById('btn-ema-update').disabled   = false;
@@ -2489,16 +2505,16 @@ function renderPokeStatus(key, elId) {
   const el = document.getElementById(elId), p = lastPoke[key];
   if (!p) return; // leave the static "Not poked this session." text alone
   const tail = elId === 'poke-status-ctrl'
-    ? ' — permissionless, unrelated to this research; just nudges the next epoch along.'
+    ? ' — permissionless; just nudges the next epoch along.'
     : '';
   el.innerHTML = `<span class="up">&#10003;</span> Block ${p.blockNumber} — ` +
     `<a href="https://scan.pulsechain.com/tx/${p.txHash}" target="_blank">${p.txHash.slice(0,10)}…</a>` +
     ` — ${ago(Math.floor(p.time / 1000))} ago${tail}`;
 }
 
-// Shared poke path for all four write buttons (three oracles + the live controller's
-// triggerEpoch) — same pending/disable/error handling and per-button status rendering,
-// so the four call sites below don't each reimplement it slightly differently.
+// Shared poke path for all five write buttons (Price Oracle, Controller triggerEpoch, and
+// the three research oracles) — same pending/disable/error handling and per-button status
+// rendering, so the call sites below don't each reimplement it slightly differently.
 async function pokeContract({ contract, fnName, btnId, statusElId, pokeKey, onSuccess, benignErrors = [] }) {
   if (!contract) { alert('Connect wallet first.'); return; }
   if (!(await ensurePulseChain())) return;
@@ -2561,6 +2577,13 @@ async function callFunctionalEMAUpdate() {
   });
 }
 
+async function callPriceOracleUpdate() {
+  await pokeContract({
+    contract: writeOracleC, fnName: 'update', btnId: 'btn-price-oracle',
+    statusElId: 'poke-status-price', pokeKey: 'price',
+  });
+}
+
 async function callTriggerEpoch() {
   await pokeContract({
     contract: writeCtrlC, fnName: 'triggerEpoch', btnId: 'btn-ctrl-poke',
@@ -2569,20 +2592,22 @@ async function callTriggerEpoch() {
   });
 }
 
-// One-click version of the manual workflow: epoch trigger, then the three oracles, then a
-// final refresh — same sequence as clicking each button in turn and waiting for it to land,
-// just without babysitting it. Each step below still pops its own wallet confirmation and
-// fully handles its own errors (pokeContract never throws), so a failure or an expected skip
-// (e.g. epoch not due) on one step doesn't block the rest of the sequence.
+// One-click version of the full manual workflow: price oracle update + epoch trigger (what
+// used to require a separate visit to the SunPLSV2 vault page), then the three research
+// oracles, then a final refresh — same sequence as clicking each button in turn and waiting
+// for it to land, just without babysitting it. Each step below still pops its own wallet
+// confirmation and fully handles its own errors (pokeContract never throws), so a failure or
+// an expected skip (e.g. epoch not due) on one step doesn't block the rest of the sequence.
 async function runAllPokes() {
   if (!signer) { alert('Connect wallet first.'); return; }
   const btn = document.getElementById('btn-run-all'), status = document.getElementById('run-all-status');
   btn.disabled = true;
   const steps = [
-    ['1/4 — Epoch trigger',   callTriggerEpoch],
-    ['2/4 — Native Index',    callUpdate],
-    ['3/4 — Functional v2',   callFunctional2Update],
-    ['4/4 — V4 Oracle',       callFunctionalEMAUpdate],
+    ['1/5 — Price Oracle',    callPriceOracleUpdate],
+    ['2/5 — Epoch trigger',   callTriggerEpoch],
+    ['3/5 — Native Index',    callUpdate],
+    ['4/5 — Functional v2',   callFunctional2Update],
+    ['5/5 — V4 Oracle',       callFunctionalEMAUpdate],
   ];
   for (const [label, fn] of steps) {
     status.textContent = `Running ${label}… (see status under that button below)`;
@@ -2603,10 +2628,11 @@ function tick() {
   if (countdown <= 0) { countdown = 30; refresh(); }
   document.getElementById('footer').textContent =
     'Last refreshed: ' + new Date().toLocaleTimeString() + '  ·  Next in ' + countdown + 's';
+  renderPokeStatus('price',  'poke-status-price');
+  renderPokeStatus('ctrl',   'poke-status-ctrl');
   renderPokeStatus('native', 'poke-status-native');
   renderPokeStatus('func2',  'poke-status-func2');
   renderPokeStatus('ema',    'poke-status-ema');
-  renderPokeStatus('ctrl',   'poke-status-ctrl');
 }
 
 refresh(); renderHist(); renderRegimeHist(); renderObsLog(); setInterval(tick, 1000);
