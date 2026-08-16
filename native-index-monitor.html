@@ -680,6 +680,7 @@
       </tr>
     </tfoot>
   </table>
+  <div id="gas-ema-stickiness-watch" style="margin-top:12px"></div>
 </div>
 
 <!-- ── Manipulation Cost (live) ── -->
@@ -2034,6 +2035,45 @@ async function refresh() {
               `${diff>=0?'EMA decay lag: +':'EMA absorbing spike: +'}${Math.abs(diff).toFixed(3)}%` +
             `</span>` +
           `</td>`;
+
+        // Gas EMA stickiness watch (added 2026-08-16, live research question, not a bug
+        // flag) — fires whenever smoothed and raw gas sit on OPPOSITE sides of baseline
+        // (1.0x): current conditions say one thing, the index's memory says another. Not
+        // "wrong" by itself — this is what monetary memory is supposed to do — but it's
+        // exactly the condition worth watching to tell whether the EMA is prudently
+        // damping a resolved spike or overpowering current conditions for too long.
+        const watchEl = document.getElementById('gas-ema-stickiness-watch');
+        const opposingSigns = (smC - 1) * (rvC - 1) < 0;
+        if (watchEl && opposingSigns) {
+          const carrying = smC > 1 ? 'elevated blockspace stress' : 'a below-baseline reading';
+          const now      = rvC > 1 ? 'above' : 'below';
+          // Estimated updates for the smoothed value to cross back to 1.0x, IF raw gas
+          // held exactly at today's live level the whole time — solving
+          // 1.0 = rawC + (smC - rawC) * (1-alpha)^n for n. Always well-defined and in
+          // (0, 1-alpha-log-ratio) here because opposingSigns guarantees 1.0 sits strictly
+          // between rvC and smC. Purely illustrative — raw gas will not actually hold
+          // still, this is "how sticky is the memory," not a forecast.
+          const gasAlphaBps = await functionalEMAC.gasEmaAlphaBps();
+          const alpha = gasAlphaBps / 10000;
+          const ratio = (1 - rvC) / (smC - rvC);
+          const n = Math.log(ratio) / Math.log(1 - alpha);
+          const updatesToNormalize = Math.ceil(Math.max(0, n));
+          watchEl.innerHTML =
+            `<div class="footer" style="background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.3); ` +
+            `border-radius:8px; padding:10px 12px; margin:0; color:var(--text)">` +
+            `<b style="color:var(--yellow)">Gas EMA stickiness watch:</b> current raw gas is ${now} baseline` +
+            ` (${rvC.toFixed(4)}x) while the EMA blockspace component remains at ${smC.toFixed(4)}x, still` +
+            ` carrying ${carrying} forward. Not automatically a bug — this may be exactly what "monetary` +
+            ` memory" should do — but it's the thing to watch: is the EMA prudently smoothing, or is it` +
+            ` overpowering current conditions for too long?` +
+            `<br><span class="dim" style="font-size:11px">Estimated ~${updatesToNormalize} more update()` +
+            ` calls for the smoothed value to cross back to 1.0x, <i>if</i> raw gas holds near today's` +
+            ` live level the whole time (it won't, this is illustrative of EMA memory length, not a` +
+            ` forecast — recomputed fresh each refresh from live alpha=${(alpha*100).toFixed(0)}%).</span>` +
+            `</div>`;
+        } else if (watchEl) {
+          watchEl.innerHTML = '';
+        }
       }
 
       // ── Manipulation Cost (live) — cost to move the ACCEPTED v4 index ────
