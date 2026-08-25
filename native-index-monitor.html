@@ -2124,7 +2124,16 @@ async function refresh() {
                 blockspaceComponent, liquidityDepthComponent,
                 reserveEmaAlphaBps: alphaBps, previousAccepted, maxMoveBps: 100, // matches MAX_INDEX_MOVE_BPS
               });
-              if (wplsNeeded === null) return `<td class="dim">n/a</td>`;
+              // null means "not reachable via this route's injection alone" — happens when
+              // blockspace's own contribution to the raw index (fixed from this route's
+              // perspective; gas isn't something an attacker injects WPLS into) is already
+              // large enough that even driving this route's market-access ratio to its floor
+              // can't pull the weighted index down to the target. Real state during extreme
+              // gas stress (verified 2026-08-24), not a stale/broken calculation — worth
+              // saying so explicitly rather than a bare "n/a" that could read either as
+              // "infinitely safe" or "something broke," both wrong.
+              if (wplsNeeded === null) return `<td class="dim">Not reachable via this route alone` +
+                `<br><span style="font-size:11px">blockspace (not injectable here) currently dominates the index — see EMA Component Breakdown above</span></td>`;
               if (wplsNeeded === 0) {
                 if (tier.bp === 0.01) cheapestHundredBpCostUsd = 0;
                 return `<td><span style="color:var(--yellow)">Already moving this way</span><br><span class="dim" style="font-size:11px">organic conditions exceed this target, no manipulation needed</span></td>`;
