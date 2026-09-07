@@ -602,7 +602,21 @@
 
   <script>
   const ethers = window.ethers;
-  const PUBLIC_RPC = "https://rpc.pulsechain.com";
+  const PUBLIC_RPCS = [
+    "https://rpc.pulsechain.com",
+    "https://rpc-pulsechain.g4mm4.io",
+    "https://pulsechain.publicnode.com"
+  ];
+  async function createPulsechainProvider() {
+    for (const url of PUBLIC_RPCS) {
+      try {
+        const p = new ethers.JsonRpcProvider(url);
+        await p.getBlockNumber();
+        return p;
+      } catch (e) { /* try next endpoint */ }
+    }
+    throw new Error("All PulseChain RPC endpoints unreachable");
+  }
 
   const VAULT_ADDR      = "0xfbBd23B115FE4540e07A2d57004D0503Bb37B29e";
   const TOKEN_ADDR      = "0x5d29509551378B55E0e79e3e9a7f610aC1f281D5";
@@ -664,7 +678,7 @@
   async function initReadOnly() {
     try {
       const [VAULT_ABI, TOKEN_ABI, ORACLE_ABI, CTRL_ABI] = await loadABIs();
-      roProvider   = new ethers.JsonRpcProvider(PUBLIC_RPC);
+      roProvider   = await createPulsechainProvider();
       roVault      = new ethers.Contract(VAULT_ADDR,      VAULT_ABI,  roProvider);
       roOracle     = new ethers.Contract(ORACLE_ADDR,     ORACLE_ABI, roProvider);
       roController = new ethers.Contract(CONTROLLER_ADDR, CTRL_ABI,   roProvider);
